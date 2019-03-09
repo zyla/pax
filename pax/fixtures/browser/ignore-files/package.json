@@ -1,0 +1,8 @@
+{
+  "browser": {
+    "./file-rel-ext.js": false,
+    "./file-rel-noext": false,
+    "file-bare-ext.js": false,
+    "file-bare-noext": false
+  }
+}

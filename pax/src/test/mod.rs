@@ -1301,10 +1301,16 @@ fn test_resolve_consistency() {
             'use strict'
             let success = true
             function y(real, from, to) {
-                if (real.startsWith('.')) real = real.slice(1)
-                if (!real.startsWith('/')) real = '/' + real
+                if (real && real.startsWith('.')) real = real.slice(1)
+                if (real && !real.startsWith('/')) real = '/' + real
                 if (real !== to) {
                     console.error(`failed:\n  '${from}'\ndoes not resolve to:\n  '${to}'\nit resolved to:\n  '${real}'\n`)
+                    success = false
+                }
+            }
+            function i(real, realTo, from) {
+                if (Object.prototype.toString.call(real) !== '[object Object]' || Object.keys(real).length !== 0) {
+                    console.error(`failed:\n  '${from}'\nis not ignored; it resolved to:\n  '${realTo}'\n`)
                     success = false
                 }
             }
@@ -1344,7 +1350,17 @@ fn test_resolve_consistency() {
                         }
                     }
                 }
-                Ignore => unimplemented!(),
+                Ignore => match target {
+                    Target::Browserify => {
+                        writeln!(b, "i(require({from}), require({from}), {from})", from=from).unwrap();
+                    }
+                    Target::Webpack => {
+                        writeln!(b, "i(require({from}), require.resolve({from}), {from})", from=from).unwrap();
+                    }
+                    Target::Node => {
+                        panic!("ignore tests are invalid for node target");
+                    }
+                },
                 External => unimplemented!(),
                 Fail => match target {
                     Target::Browserify => {
@@ -1767,6 +1783,34 @@ where F: FnMut(&str, &str, Resolution<'static>, &InputOptions) {
                   Y("browser/alternate-files/node_modules/file-from-bare-to-bare-browser.js"), &br);
     assert_resolves(ctx,                  "./file-from-bare-to-bare-default.js",
                   Y("browser/alternate-files/node_modules/file-from-bare-to-bare-browser.js"), &br);
+
+    let ctx = "browser/hypothetical.js";
+    assert_resolves(ctx,  "./ignore-files/file-bare-noext",
+                  Y("browser/ignore-files/file-bare-noext.js"), &no);
+    assert_resolves(ctx,  "./ignore-files/file-bare-noext.js",
+                  Y("browser/ignore-files/file-bare-noext.js"), &no);
+    assert_resolves(ctx,  "./ignore-files/file-bare-ext",
+                  Y("browser/ignore-files/file-bare-ext.js"), &no);
+    assert_resolves(ctx,  "./ignore-files/file-bare-ext.js",
+                  Y("browser/ignore-files/file-bare-ext.js"), &no);
+    assert_resolves(ctx,  "./ignore-files/file-rel-noext",
+                  Y("browser/ignore-files/file-rel-noext.js"), &no);
+    assert_resolves(ctx,  "./ignore-files/file-rel-noext.js",
+                  Y("browser/ignore-files/file-rel-noext.js"), &no);
+    assert_resolves(ctx,  "./ignore-files/file-rel-ext",
+                  Y("browser/ignore-files/file-rel-ext.js"), &no);
+    assert_resolves(ctx,  "./ignore-files/file-rel-ext.js",
+                  Y("browser/ignore-files/file-rel-ext.js"), &no);
+    assert_resolves(ctx,  "./ignore-files/file-bare-noext", Ignore, &br);
+    assert_resolves(ctx,  "./ignore-files/file-bare-noext.js",
+                  Y("browser/ignore-files/file-bare-noext.js"), &br);
+    assert_resolves(ctx,  "./ignore-files/file-bare-ext", Ignore, &br);
+    assert_resolves(ctx,  "./ignore-files/file-bare-ext.js", Ignore, &br);
+    assert_resolves(ctx,  "./ignore-files/file-rel-noext", Ignore, &br);
+    assert_resolves(ctx,  "./ignore-files/file-rel-noext.js",
+                  Y("browser/ignore-files/file-rel-noext.js"), &br);
+    assert_resolves(ctx,  "./ignore-files/file-rel-ext", Ignore, &br);
+    assert_resolves(ctx,  "./ignore-files/file-rel-ext.js", Ignore, &br);
 }
 
 #[test]
