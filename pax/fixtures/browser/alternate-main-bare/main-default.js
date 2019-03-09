@@ -1,1 +1,1 @@
-console.log('failure')
+module.exports = __filename

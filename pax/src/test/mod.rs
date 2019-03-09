@@ -1218,7 +1218,23 @@ where F: FnMut(&str, &str, Option<&str>, &InputOptions) {
 fn test_resolve_consistency() {
     // meta-test: ensure test_resolve matches node behavior
 
-    type Cases = FnvHashSet<(String, Option<String>)>;
+    #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+    enum Target {
+        Browserify,
+        Webpack,
+        Node,
+    }
+    impl Display for Target {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str(match *self {
+                Target::Browserify => "browserify",
+                Target::Webpack => "webpack",
+                Target::Node => "node",
+            })
+        }
+    }
+
+    type Cases = Vec<(String, Option<String>)>;
     type CaseMap = FnvHashMap<String, Cases>;
 
     let mut cjs = FnvHashMap::default();
@@ -1235,55 +1251,103 @@ fn test_resolve_consistency() {
                 &mut cjs
             };
             assertions.entry(ctx.to_owned())
-                .or_insert_with(FnvHashSet::default)
-                .insert((from.to_owned(), to.map(ToOwned::to_owned)));
+                .or_insert_with(Vec::default)
+                .push((from.to_owned(), to.map(ToOwned::to_owned)));
         };
 
-        test_resolve_with(&mut append);
-        test_resolve_unicode_with(&mut append);
+        // test_resolve_with(&mut append);
+        // test_resolve_unicode_with(&mut append);
         test_browser_with(&mut append);
     }
 
-    fn make_source(base: &Path, cases: &Cases) -> Vec<u8> {
-        let mut b = indoc!(br#"
+    fn make_source(base: &Path, target: Target, cases: &Cases) -> Vec<u8> {
+        // browser tests use module.exports = __filename
+        let mut b = if target == Target::Node { indoc!(br#"
             'use strict'
             const assert = require('assert').strict
-            const path = require('path')
-            const fs = require('fs')
+            let success = true
             function n(from) {
-                let fail = false
-                try {{require.resolve(from), fail = true}} catch(_) {{}}
-                if (fail) assert.fail(`'${from}' does not fail to resolve`)
-            }
-            function y(from, to) {
-                try {
-                    assert.equal(fs.realpathSync(require.resolve(from)), fs.realpathSync(to))
-                } catch (e) {
-                    assert.fail(`'${from}' does not resolve to '${to}'`)
+                let fail = false, to
+                try {{to = require.resolve(from), fail = true}} catch(_) {{}}
+                if (fail) {
+                    console.error(`failed:\n  '${from}'\ndoes not fail to resolve; it resolved to:\n  '${to}'\n`)
+                    success = false
                 }
             }
-        "#).to_vec();
+            function y(from, to) {
+                let realTo
+                try {
+                    assert.equal(realTo = require.resolve(from), to)
+                } catch (e) {
+                    console.error(`failed:\n  '${from}'\ndoes not resolve to:\n  '${to}'\nit resolved to:\n  '${realTo}'\n`)
+                    console.error(e.stack)
+                    success = false
+                }
+            }
+        "#).to_vec() } else { indoc!(br#"
+            'use strict'
+            let success = true
+            function y(real, from, to) {
+                if (real.startsWith('.')) real = real.slice(1)
+                if (!real.startsWith('/')) real = '/' + real
+                if (real !== to) {
+                    console.error(`failed:\n  '${from}'\ndoes not resolve to:\n  '${to}'\nit resolved to:\n  '${real}'\n`)
+                    success = false
+                }
+            }
+            function n(real, from) {
+                if (real && real.startsWith('.')) real = real.slice(1)
+                if (real && !real.startsWith('/')) real = '/' + real
+                if (real) {
+                    console.error(`failed:\n  '${from}'\ndoes not fail to resolve; it resolved to:\n  '${real}'\n`)
+                    success = false
+                }
+            }
+        "#).to_vec() };
         for (from, to) in cases {
             let from_path = Path::new(from);
             let from = if from_path.is_absolute() {
                 let suffix = from_path.strip_prefix(fixture_path()).expect("absolute path outside of fixtures");
-                serde_json::to_string(&base.join(suffix))
+                let mut from = base.join(suffix.parent().unwrap()).canonicalize().unwrap();
+                from.push(suffix.file_name().unwrap());
+                serde_json::to_string(&from)
             } else {
-                serde_json::to_string(from)
+                serde_json::to_string(&from)
             }.unwrap();
             if let Some(to) = to {
                 let mut to_path = base.to_owned();
                 to_path.append_resolving(to);
-                let to = serde_json::to_string(to_path.to_str().unwrap()).unwrap();
-                writeln!(b, "y({from}, {to})", from=from, to=to).unwrap();
+                let to = serde_json::to_string(to_path.canonicalize().unwrap().to_str().unwrap()).unwrap();
+                match target {
+                    Target::Browserify => {
+                        writeln!(b, "y(require({from}), {from}, {to})", from=from, to=to).unwrap();
+                    }
+                    Target::Webpack => {
+                        writeln!(b, "y(require.resolve({from}), {from}, {to})", from=from, to=to).unwrap();
+                    }
+                    Target::Node => {
+                        writeln!(b, "y({from}, {to})", from=from, to=to).unwrap();
+                    }
+                }
             } else {
-                writeln!(b, "n({from})", from=from).unwrap();
+                match target {
+                    Target::Browserify => {
+                        writeln!(b, "n(require({from}), {from})", from=from).unwrap();
+                    }
+                    Target::Webpack => {
+                        writeln!(b, "n(require.resolve({from}), {from})", from=from).unwrap();
+                    }
+                    Target::Node => {
+                        writeln!(b, "n({from})", from=from).unwrap();
+                    }
+                }
             }
         }
+        writeln!(b, r#"process.nextTick(() => {{if (!success) throw new Error('failed: {} consistency')}})"#, target).unwrap();
         // io::stdout().write_all(&b).unwrap();
         b
     }
-    fn test_file(base: &Path, esm: bool, browser: bool, ctx: &str, cases: &Cases) {
+    fn test_file(base: &Path, esm: bool, target: Target, ctx: &str, cases: &Cases) {
         let mut ctx_dir = base.to_owned();
         ctx_dir.append_resolving(ctx);
         ctx_dir.pop();
@@ -1295,32 +1359,67 @@ fn test_resolve_consistency() {
             .tempfile_in(&ctx_dir)
             .unwrap();
         file.as_file_mut()
-            .write_all(&make_source(base, cases))
+            .write_all(&make_source(base, target, cases))
             .unwrap();
 
-        let path = file.path().to_str().unwrap();
+        let path = file.path().canonicalize().unwrap();
+        let path = path.to_str().unwrap();
         let output;
-        if browser {
-            let to_file = tempfile::Builder::new()
+        if target != Target::Node {
+            let mut to_file = tempfile::Builder::new()
                 .suffix(ext)
                 .tempfile_in(&ctx_dir)
                 .unwrap();
-            let to_path = to_file.path().to_str().unwrap();
+            let to_path = to_file.path().canonicalize().unwrap();
+            let to_path = to_path.to_str().unwrap();
+            let to_write = to_file.as_file_mut();
 
-            // let mut browserify_path = fixture_path();
-            // browserify_path.push("tools/node_modules/.bin/browserify");
-            let browserify_path = base.join("tools/node_modules/.bin/browserify");
-            dbg!(browserify_path.exists());
-            let ok = process::Command::new(browserify_path)
-                .stdout(process::Stdio::piped())
-                .args(&[&path, &to_path])
-                .status()
-                .expect("failed to run browserify")
-                .success();
-            if !ok {
-                panic!("browserify failed");
+            let mut tools_path = fixture_path();
+            tools_path.append_resolving("tools");
+            // let tools_path = base.join("tools");
+
+            match target {
+                Target::Webpack => {
+                    let webpack_path = tools_path.join("node_modules/.bin/webpack");
+                    let config_path = tools_path.join("webpack.config.js");
+                    let ok = process::Command::new(webpack_path)
+                        .current_dir("/")
+                        .args(&["--config", &config_path.to_str().unwrap(), &path, "-o", &to_path])
+                        .status()
+                        .expect("failed to run webpack")
+                        .success();
+                    if !ok {
+                        panic!("webpack failed");
+                    }
+                },
+                Target::Browserify => {
+                    to_write
+                        .write_all(indoc!(br#"
+                            require = function() {};
+                        "#))
+                        .unwrap();
+
+                    let browserify_path = tools_path.join("node_modules/.bin/browserify");
+                    let mut browserify = process::Command::new(browserify_path)
+                        .current_dir("/")
+                        .stderr(process::Stdio::inherit())
+                        .stdout(process::Stdio::piped())
+                        .args(&["--ignore-missing", "--no-commondir", &path]) // , "-o", &to_path
+                        .spawn()
+                        .expect("failed to start browserify");
+                    io::copy(browserify.stdout.as_mut().unwrap(), to_write).unwrap();
+                    let ok = browserify
+                        .wait()
+                        .expect("failed to run browserify")
+                        .success();
+                    if !ok {
+                        panic!("browserify failed");
+                    }
+                }
+                Target::Node => unreachable!(),
             }
 
+            fs::copy(&to_path, "/tmp/test.js").unwrap();
             output = process::Command::new("node")
                 .args(&[&to_path])
                 .output()
@@ -1342,9 +1441,9 @@ fn test_resolve_consistency() {
             panic!("tests are inconsistent with node/browserify");
         }
     }
-    fn test_file_map(base: &Path, esm: bool, browser: bool, map: &CaseMap) {
+    fn test_file_map(base: &Path, esm: bool, target: Target, map: &CaseMap) {
         for (ctx, cases) in map.into_iter() {
-            test_file(base, esm, browser, ctx, cases)
+            test_file(base, esm, target, ctx, cases)
         }
     }
 
@@ -1366,12 +1465,20 @@ fn test_resolve_consistency() {
             }
         }
     }
-    npm_install(&base_dir.path().join("tools"));
-    test_file_map(base_dir.path(), false, false, &cjs);
-    test_file_map(base_dir.path(), false, true, &browser);
-    test_file_map(base_dir.path(), true, false, &esm);
+    // npm_install(&base_dir.path().join("tools"));
+    npm_install(&fixture_dir.join("tools"));
+    test_file_map(base_dir.path(), false, Target::Node, &cjs);
+    test_file_map(base_dir.path(), false, Target::Webpack, &browser);
+    if false {
+        test_file_map(base_dir.path(), false, Target::Browserify, &browser);
+    }
+    test_file_map(base_dir.path(), true, Target::Node, &esm);
 }
 
+#[test]
+fn test_browser() {
+    test_browser_with(assert_resolves);
+}
 fn test_browser_with<F>(mut assert_resolves: F)
 where F: FnMut(&str, &str, Option<&str>, &InputOptions) {
     let no = InputOptions {
@@ -1390,20 +1497,260 @@ where F: FnMut(&str, &str, Option<&str>, &InputOptions) {
     let ctx = "browser/hypothetical.js";
     assert_resolves(ctx,  "./alternate-main-rel",
                Some("browser/alternate-main-rel/main-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-main-rel/main-default",
+               Some("browser/alternate-main-rel/main-default.js"), &no);
     assert_resolves(ctx,  "./alternate-main-rel/main-default.js",
                Some("browser/alternate-main-rel/main-default.js"), &no);
     assert_resolves(ctx,  "./alternate-main-bare",
+               Some("browser/alternate-main-bare/main-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-main-bare/main-default",
                Some("browser/alternate-main-bare/main-default.js"), &no);
     assert_resolves(ctx,  "./alternate-main-bare/main-default.js",
                Some("browser/alternate-main-bare/main-default.js"), &no);
     assert_resolves(ctx,  "./alternate-main-rel",
                Some("browser/alternate-main-rel/main-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-main-rel/main-default",
+               Some("browser/alternate-main-rel/main-default.js"), &br);
     assert_resolves(ctx,  "./alternate-main-rel/main-default.js",
-               Some("browser/alternate-main-rel/main-browser.js"), &br);
+               Some("browser/alternate-main-rel/main-default.js"), &br);
     assert_resolves(ctx,  "./alternate-main-bare",
                Some("browser/alternate-main-bare/main-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-main-bare/main-default",
+               Some("browser/alternate-main-bare/main-default.js"), &br);
     assert_resolves(ctx,  "./alternate-main-bare/main-default.js",
+               Some("browser/alternate-main-bare/main-default.js"), &br);
+    let ctx = "browser/alternate-main-rel/hypothetical.js";
+    assert_resolves(ctx,                     ".",
+               Some("browser/alternate-main-rel/main-default.js"), &no);
+    assert_resolves(ctx,                     "./main-default",
+               Some("browser/alternate-main-rel/main-default.js"), &no);
+    assert_resolves(ctx,                     "./main-default.js",
+               Some("browser/alternate-main-rel/main-default.js"), &no);
+    assert_resolves(ctx,                     ".",
+               Some("browser/alternate-main-rel/main-browser.js"), &br);
+    assert_resolves(ctx,                     "./main-default.js",
+               Some("browser/alternate-main-rel/main-default.js"), &br);
+    let ctx = "browser/alternate-main-bare/hypothetical.js";
+    assert_resolves(ctx,                     ".",
+               Some("browser/alternate-main-bare/main-default.js"), &no);
+    assert_resolves(ctx,                     "./main-default.js",
+               Some("browser/alternate-main-bare/main-default.js"), &no);
+    assert_resolves(ctx,                     "./main-default",
+               Some("browser/alternate-main-bare/main-default.js"), &no);
+    assert_resolves(ctx,                     ".",
                Some("browser/alternate-main-bare/main-browser.js"), &br);
+    assert_resolves(ctx,                     "./main-default",
+               Some("browser/alternate-main-bare/main-default.js"), &br);
+    assert_resolves(ctx,                     "./main-default.js",
+               Some("browser/alternate-main-bare/main-default.js"), &br);
+
+    let ctx = "browser/hypothetical.js";
+    assert_resolves(ctx,  "./alternate-files-main-rel",
+               Some("browser/alternate-files-main-rel/main-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files-main-rel/main-default",
+               Some("browser/alternate-files-main-rel/main-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files-main-rel/main-default.js",
+               Some("browser/alternate-files-main-rel/main-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files-main-bare",
+               Some("browser/alternate-files-main-bare/main-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files-main-bare/main-default",
+               Some("browser/alternate-files-main-bare/main-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files-main-bare/main-default.js",
+               Some("browser/alternate-files-main-bare/main-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files-main-rel",
+               Some("browser/alternate-files-main-rel/main-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-files-main-rel/main-default",
+               Some("browser/alternate-files-main-rel/main-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-files-main-rel/main-default.js",
+               Some("browser/alternate-files-main-rel/main-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-files-main-bare",
+               Some("browser/alternate-files-main-bare/node_modules/main-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-files-main-bare/main-default",
+               Some("browser/alternate-files-main-bare/node_modules/main-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-files-main-bare/main-default.js",
+               Some("browser/alternate-files-main-bare/node_modules/main-browser.js"), &br);
+    let ctx = "browser/alternate-files-main-rel/hypothetical.js";
+    assert_resolves(ctx,                           ".",
+               Some("browser/alternate-files-main-rel/main-default.js"), &no);
+    assert_resolves(ctx,                           "./main-default",
+               Some("browser/alternate-files-main-rel/main-default.js"), &no);
+    assert_resolves(ctx,                           "./main-default.js",
+               Some("browser/alternate-files-main-rel/main-default.js"), &no);
+    assert_resolves(ctx,                           ".",
+               Some("browser/alternate-files-main-rel/main-browser.js"), &br);
+    assert_resolves(ctx,                           "./main-default",
+               Some("browser/alternate-files-main-rel/main-browser.js"), &br);
+    assert_resolves(ctx,                           "./main-default.js",
+               Some("browser/alternate-files-main-rel/main-browser.js"), &br);
+    let ctx = "browser/alternate-files-main-bare/hypothetical.js";
+    assert_resolves(ctx,                            ".",
+               Some("browser/alternate-files-main-bare/main-default.js"), &no);
+    assert_resolves(ctx,                            "./main-default",
+               Some("browser/alternate-files-main-bare/main-default.js"), &no);
+    assert_resolves(ctx,                            "./main-default.js",
+               Some("browser/alternate-files-main-bare/main-default.js"), &no);
+    assert_resolves(ctx,                            ".",
+               Some("browser/alternate-files-main-bare/node_modules/main-browser.js"), &br);
+    assert_resolves(ctx,                            "./main-default",
+               Some("browser/alternate-files-main-bare/node_modules/main-browser.js"), &br);
+    assert_resolves(ctx,                            "./main-default.js",
+               Some("browser/alternate-files-main-bare/node_modules/main-browser.js"), &br);
+
+    let ctx = "browser/hypothetical.js";
+    assert_resolves(ctx,  "./alternate-files/file-from-noext-to-noext-default",
+               Some("browser/alternate-files/file-from-noext-to-noext-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files/file-from-noext-to-noext-default.js",
+               Some("browser/alternate-files/file-from-noext-to-noext-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files/file-from-noext-to-noext-default.json",
+               Some("browser/alternate-files/file-from-noext-to-noext-default.json"), &no);
+    assert_resolves(ctx,  "./alternate-files/file-from-noext-to-ext-default",
+               Some("browser/alternate-files/file-from-noext-to-ext-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files/file-from-noext-to-ext-default.js",
+               Some("browser/alternate-files/file-from-noext-to-ext-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files/file-from-noext-to-ext-default.json",
+               Some("browser/alternate-files/file-from-noext-to-ext-default.json"), &no);
+    assert_resolves(ctx,  "./alternate-files/file-from-ext-to-noext-default",
+               Some("browser/alternate-files/file-from-ext-to-noext-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files/file-from-ext-to-noext-default.js",
+               Some("browser/alternate-files/file-from-ext-to-noext-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files/file-from-ext-to-noext-default.json",
+               Some("browser/alternate-files/file-from-ext-to-noext-default.json"), &no);
+    assert_resolves(ctx,  "./alternate-files/file-from-ext-to-ext-default",
+               Some("browser/alternate-files/file-from-ext-to-ext-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files/file-from-ext-to-ext-default.js",
+               Some("browser/alternate-files/file-from-ext-to-ext-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files/file-from-rel-to-rel-default",
+               Some("browser/alternate-files/file-from-rel-to-rel-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files/file-from-rel-to-rel-default.js",
+               Some("browser/alternate-files/file-from-rel-to-rel-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files/file-from-rel-to-bare-default",
+               Some("browser/alternate-files/file-from-rel-to-bare-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files/file-from-rel-to-bare-default.js",
+               Some("browser/alternate-files/file-from-rel-to-bare-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files/file-from-bare-to-rel-default",
+               Some("browser/alternate-files/file-from-bare-to-rel-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files/file-from-bare-to-rel-default.js",
+               Some("browser/alternate-files/file-from-bare-to-rel-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files/file-from-bare-to-bare-default",
+               Some("browser/alternate-files/file-from-bare-to-bare-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files/file-from-bare-to-bare-default.js",
+               Some("browser/alternate-files/file-from-bare-to-bare-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-files/file-from-noext-to-noext-default",
+               Some("browser/alternate-files/file-from-noext-to-noext-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-files/file-from-noext-to-noext-default.js",
+               Some("browser/alternate-files/file-from-noext-to-noext-default.js"), &br);
+    assert_resolves(ctx,  "./alternate-files/file-from-noext-to-noext-default.json",
+               Some("browser/alternate-files/file-from-noext-to-noext-default.json"), &br);
+    assert_resolves(ctx,  "./alternate-files/file-from-noext-to-ext-default",
+               Some("browser/alternate-files/file-from-noext-to-ext-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-files/file-from-noext-to-ext-default.js",
+               Some("browser/alternate-files/file-from-noext-to-ext-default.js"), &br);
+    assert_resolves(ctx,  "./alternate-files/file-from-noext-to-ext-default.json",
+               Some("browser/alternate-files/file-from-noext-to-ext-default.json"), &br);
+    assert_resolves(ctx,  "./alternate-files/file-from-ext-to-noext-default",
+               Some("browser/alternate-files/file-from-ext-to-noext-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-files/file-from-ext-to-noext-default.js",
+               Some("browser/alternate-files/file-from-ext-to-noext-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-files/file-from-ext-to-noext-default.json",
+               Some("browser/alternate-files/file-from-ext-to-noext-default.json"), &br);
+    assert_resolves(ctx,  "./alternate-files/file-from-ext-to-ext-default",
+               Some("browser/alternate-files/file-from-ext-to-ext-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-files/file-from-ext-to-ext-default.js",
+               Some("browser/alternate-files/file-from-ext-to-ext-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-files/file-from-rel-to-rel-default",
+               Some("browser/alternate-files/file-from-rel-to-rel-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-files/file-from-rel-to-rel-default.js",
+               Some("browser/alternate-files/file-from-rel-to-rel-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-files/file-from-rel-to-bare-default",
+               Some("browser/alternate-files/node_modules/file-from-rel-to-bare-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-files/file-from-rel-to-bare-default.js",
+               Some("browser/alternate-files/node_modules/file-from-rel-to-bare-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-files/file-from-bare-to-rel-default",
+               Some("browser/alternate-files/file-from-bare-to-rel-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-files/file-from-bare-to-rel-default.js",
+               Some("browser/alternate-files/file-from-bare-to-rel-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-files/file-from-bare-to-bare-default",
+               Some("browser/alternate-files/node_modules/file-from-bare-to-bare-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-files/file-from-bare-to-bare-default.js",
+               Some("browser/alternate-files/node_modules/file-from-bare-to-bare-browser.js"), &br);
+
+    let ctx = "browser/alternate-files/hypothetical.js";
+    assert_resolves(ctx,                  "./file-from-noext-to-noext-default",
+               Some("browser/alternate-files/file-from-noext-to-noext-default.js"), &no);
+    assert_resolves(ctx,                  "./file-from-noext-to-noext-default.js",
+               Some("browser/alternate-files/file-from-noext-to-noext-default.js"), &no);
+    assert_resolves(ctx,                  "./file-from-noext-to-noext-default.json",
+               Some("browser/alternate-files/file-from-noext-to-noext-default.json"), &no);
+    assert_resolves(ctx,                  "./file-from-noext-to-ext-default",
+               Some("browser/alternate-files/file-from-noext-to-ext-default.js"), &no);
+    assert_resolves(ctx,                  "./file-from-noext-to-ext-default.js",
+               Some("browser/alternate-files/file-from-noext-to-ext-default.js"), &no);
+    assert_resolves(ctx,                  "./file-from-noext-to-ext-default.json",
+               Some("browser/alternate-files/file-from-noext-to-ext-default.json"), &no);
+    assert_resolves(ctx,                  "./file-from-ext-to-noext-default",
+               Some("browser/alternate-files/file-from-ext-to-noext-default.js"), &no);
+    assert_resolves(ctx,                  "./file-from-ext-to-noext-default.js",
+               Some("browser/alternate-files/file-from-ext-to-noext-default.js"), &no);
+    assert_resolves(ctx,                  "./file-from-ext-to-noext-default.json",
+               Some("browser/alternate-files/file-from-ext-to-noext-default.json"), &no);
+    assert_resolves(ctx,                  "./file-from-ext-to-ext-default",
+               Some("browser/alternate-files/file-from-ext-to-ext-default.js"), &no);
+    assert_resolves(ctx,                  "./file-from-ext-to-ext-default.js",
+               Some("browser/alternate-files/file-from-ext-to-ext-default.js"), &no);
+    assert_resolves(ctx,                  "./file-from-rel-to-rel-default",
+               Some("browser/alternate-files/file-from-rel-to-rel-default.js"), &no);
+    assert_resolves(ctx,                  "./file-from-rel-to-rel-default.js",
+               Some("browser/alternate-files/file-from-rel-to-rel-default.js"), &no);
+    assert_resolves(ctx,                  "./file-from-rel-to-bare-default",
+               Some("browser/alternate-files/file-from-rel-to-bare-default.js"), &no);
+    assert_resolves(ctx,                  "./file-from-rel-to-bare-default.js",
+               Some("browser/alternate-files/file-from-rel-to-bare-default.js"), &no);
+    assert_resolves(ctx,                  "./file-from-bare-to-rel-default.js",
+               Some("browser/alternate-files/file-from-bare-to-rel-default.js"), &no);
+    assert_resolves(ctx,                  "./file-from-bare-to-bare-default",
+               Some("browser/alternate-files/file-from-bare-to-bare-default.js"), &no);
+    assert_resolves(ctx,                  "./file-from-bare-to-bare-default.js",
+               Some("browser/alternate-files/file-from-bare-to-bare-default.js"), &no);
+    assert_resolves(ctx,                  "./file-from-noext-to-noext-default",
+               Some("browser/alternate-files/file-from-noext-to-noext-browser.js"), &br);
+    assert_resolves(ctx,                  "./file-from-noext-to-noext-default.js",
+               Some("browser/alternate-files/file-from-noext-to-noext-default.js"), &br);
+    assert_resolves(ctx,                  "./file-from-noext-to-noext-default.json",
+               Some("browser/alternate-files/file-from-noext-to-noext-default.json"), &br);
+    assert_resolves(ctx,                  "./file-from-noext-to-ext-default",
+               Some("browser/alternate-files/file-from-noext-to-ext-browser.js"), &br);
+    assert_resolves(ctx,                  "./file-from-noext-to-ext-default.js",
+               Some("browser/alternate-files/file-from-noext-to-ext-default.js"), &br);
+    assert_resolves(ctx,                  "./file-from-noext-to-ext-default.json",
+               Some("browser/alternate-files/file-from-noext-to-ext-default.json"), &br);
+    assert_resolves(ctx,                  "./file-from-ext-to-noext-default",
+               Some("browser/alternate-files/file-from-ext-to-noext-browser.js"), &br);
+    assert_resolves(ctx,                  "./file-from-ext-to-noext-default.js",
+               Some("browser/alternate-files/file-from-ext-to-noext-browser.js"), &br);
+    assert_resolves(ctx,                  "./file-from-ext-to-noext-default.json",
+               Some("browser/alternate-files/file-from-ext-to-noext-default.json"), &br);
+    assert_resolves(ctx,                  "./file-from-ext-to-ext-default",
+               Some("browser/alternate-files/file-from-ext-to-ext-browser.js"), &br);
+    assert_resolves(ctx,                  "./file-from-ext-to-ext-default.js",
+               Some("browser/alternate-files/file-from-ext-to-ext-browser.js"), &br);
+    assert_resolves(ctx,                  "./file-from-rel-to-rel-default",
+               Some("browser/alternate-files/file-from-rel-to-rel-browser.js"), &br);
+    assert_resolves(ctx,                  "./file-from-rel-to-rel-default.js",
+               Some("browser/alternate-files/file-from-rel-to-rel-browser.js"), &br);
+    assert_resolves(ctx,                  "./file-from-rel-to-rel-default",
+               Some("browser/alternate-files/file-from-rel-to-rel-browser.js"), &br);
+    assert_resolves(ctx,                  "./file-from-rel-to-bare-default.js",
+               Some("browser/alternate-files/node_modules/file-from-rel-to-bare-browser.js"), &br);
+    assert_resolves(ctx,                  "./file-from-rel-to-bare-default",
+               Some("browser/alternate-files/node_modules/file-from-rel-to-bare-browser.js"), &br);
+    assert_resolves(ctx,                  "./file-from-bare-to-rel-default.js",
+               Some("browser/alternate-files/file-from-bare-to-rel-browser.js"), &br);
+    assert_resolves(ctx,                  "./file-from-bare-to-rel-default",
+               Some("browser/alternate-files/file-from-bare-to-rel-browser.js"), &br);
+    assert_resolves(ctx,                  "./file-from-bare-to-bare-default.js",
+               Some("browser/alternate-files/node_modules/file-from-bare-to-bare-browser.js"), &br);
+    assert_resolves(ctx,                  "./file-from-bare-to-bare-default",
+               Some("browser/alternate-files/node_modules/file-from-bare-to-bare-browser.js"), &br);
 }
 
 #[test]
