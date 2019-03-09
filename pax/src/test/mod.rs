@@ -1551,6 +1551,18 @@ where F: FnMut(&str, &str, Resolution<'static>, &InputOptions) {
                   Y("browser/alternate-main-index-bare/index.js"), &no);
     assert_resolves(ctx,  "./alternate-main-index-bare/index.js",
                   Y("browser/alternate-main-index-bare/index.js"), &no);
+    assert_resolves(ctx,  "./alternate-main-subdir-rel",
+                  Y("browser/alternate-main-subdir-rel/default/main.js"), &no);
+    assert_resolves(ctx,  "./alternate-main-subdir-rel/default/main",
+                  Y("browser/alternate-main-subdir-rel/default/main.js"), &no);
+    assert_resolves(ctx,  "./alternate-main-subdir-rel/default/main.js",
+                  Y("browser/alternate-main-subdir-rel/default/main.js"), &no);
+    assert_resolves(ctx,  "./alternate-main-subdir-bare",
+                  Y("browser/alternate-main-subdir-bare/default/main.js"), &no);
+    assert_resolves(ctx,  "./alternate-main-subdir-bare/default/main",
+                  Y("browser/alternate-main-subdir-bare/default/main.js"), &no);
+    assert_resolves(ctx,  "./alternate-main-subdir-bare/default/main.js",
+                  Y("browser/alternate-main-subdir-bare/default/main.js"), &no);
     assert_resolves(ctx,  "./alternate-main-rel",
                   Y("browser/alternate-main-rel/main-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-main-rel/main-default",
@@ -1575,6 +1587,18 @@ where F: FnMut(&str, &str, Resolution<'static>, &InputOptions) {
                   Y("browser/alternate-main-index-bare/index.js"), &br);
     assert_resolves(ctx,  "./alternate-main-index-bare/index.js",
                   Y("browser/alternate-main-index-bare/index.js"), &br);
+    assert_resolves(ctx,  "./alternate-main-subdir-rel",
+                  Y("browser/alternate-main-subdir-rel/browser/main.js"), &br);
+    assert_resolves(ctx,  "./alternate-main-subdir-rel/default/main",
+                  Y("browser/alternate-main-subdir-rel/default/main.js"), &br);
+    assert_resolves(ctx,  "./alternate-main-subdir-rel/default/main.js",
+                  Y("browser/alternate-main-subdir-rel/default/main.js"), &br);
+    assert_resolves(ctx,  "./alternate-main-subdir-bare",
+                  Y("browser/alternate-main-subdir-bare/browser/main.js"), &br);
+    assert_resolves(ctx,  "./alternate-main-subdir-bare/default/main",
+                  Y("browser/alternate-main-subdir-bare/default/main.js"), &br);
+    assert_resolves(ctx,  "./alternate-main-subdir-bare/default/main.js",
+                  Y("browser/alternate-main-subdir-bare/default/main.js"), &br);
     let ctx = "browser/alternate-main-rel/hypothetical.js";
     assert_resolves(ctx,                     ".",
                   Y("browser/alternate-main-rel/main-default.js"), &no);
@@ -1587,18 +1611,66 @@ where F: FnMut(&str, &str, Resolution<'static>, &InputOptions) {
     assert_resolves(ctx,                     "./main-default.js",
                   Y("browser/alternate-main-rel/main-default.js"), &br);
     let ctx = "browser/alternate-main-bare/hypothetical.js";
-    assert_resolves(ctx,                     ".",
+    assert_resolves(ctx,                      ".",
                   Y("browser/alternate-main-bare/main-default.js"), &no);
-    assert_resolves(ctx,                     "./main-default.js",
+    assert_resolves(ctx,                      "./main-default.js",
                   Y("browser/alternate-main-bare/main-default.js"), &no);
-    assert_resolves(ctx,                     "./main-default",
+    assert_resolves(ctx,                      "./main-default",
                   Y("browser/alternate-main-bare/main-default.js"), &no);
-    assert_resolves(ctx,                     ".",
+    assert_resolves(ctx,                      ".",
                   Y("browser/alternate-main-bare/main-browser.js"), &br);
-    assert_resolves(ctx,                     "./main-default",
+    assert_resolves(ctx,                      "./main-default",
                   Y("browser/alternate-main-bare/main-default.js"), &br);
-    assert_resolves(ctx,                     "./main-default.js",
+    assert_resolves(ctx,                      "./main-default.js",
                   Y("browser/alternate-main-bare/main-default.js"), &br);
+    let ctx = "browser/alternate-main-index-rel/hypothetical.js";
+    assert_resolves(ctx,                           ".",
+                  Y("browser/alternate-main-index-rel/index.js"), &no);
+    assert_resolves(ctx,                           "./index",
+                  Y("browser/alternate-main-index-rel/index.js"), &no);
+    assert_resolves(ctx,                           "./index.js",
+                  Y("browser/alternate-main-index-rel/index.js"), &no);
+    assert_resolves(ctx,                           ".",
+                  Y("browser/alternate-main-index-rel/index-browser.js"), &br);
+    assert_resolves(ctx,                           "./index.js",
+                  Y("browser/alternate-main-index-rel/index.js"), &br);
+    let ctx = "browser/alternate-main-index-bare/hypothetical.js";
+    assert_resolves(ctx,                            ".",
+                  Y("browser/alternate-main-index-bare/index.js"), &no);
+    assert_resolves(ctx,                            "./index.js",
+                  Y("browser/alternate-main-index-bare/index.js"), &no);
+    assert_resolves(ctx,                            "./index",
+                  Y("browser/alternate-main-index-bare/index.js"), &no);
+    assert_resolves(ctx,                            ".",
+                  Y("browser/alternate-main-index-bare/index-browser.js"), &br);
+    assert_resolves(ctx,                            "./index",
+                  Y("browser/alternate-main-index-bare/index.js"), &br);
+    assert_resolves(ctx,                            "./index.js",
+                  Y("browser/alternate-main-index-bare/index.js"), &br);
+    let ctx = "browser/alternate-main-subdir-rel/hypothetical.js";
+    assert_resolves(ctx,                            ".",
+                  Y("browser/alternate-main-subdir-rel/default/main.js"), &no);
+    assert_resolves(ctx,                            "./default/main",
+                  Y("browser/alternate-main-subdir-rel/default/main.js"), &no);
+    assert_resolves(ctx,                            "./default/main.js",
+                  Y("browser/alternate-main-subdir-rel/default/main.js"), &no);
+    assert_resolves(ctx,                            ".",
+                  Y("browser/alternate-main-subdir-rel/browser/main.js"), &br);
+    assert_resolves(ctx,                            "./default/main.js",
+                  Y("browser/alternate-main-subdir-rel/default/main.js"), &br);
+    let ctx = "browser/alternate-main-subdir-bare/hypothetical.js";
+    assert_resolves(ctx,                             ".",
+                  Y("browser/alternate-main-subdir-bare/default/main.js"), &no);
+    assert_resolves(ctx,                             "./default/main.js",
+                  Y("browser/alternate-main-subdir-bare/default/main.js"), &no);
+    assert_resolves(ctx,                             "./default/main",
+                  Y("browser/alternate-main-subdir-bare/default/main.js"), &no);
+    assert_resolves(ctx,                             ".",
+                  Y("browser/alternate-main-subdir-bare/browser/main.js"), &br);
+    assert_resolves(ctx,                             "./default/main",
+                  Y("browser/alternate-main-subdir-bare/default/main.js"), &br);
+    assert_resolves(ctx,                             "./default/main.js",
+                  Y("browser/alternate-main-subdir-bare/default/main.js"), &br);
 
     let ctx = "browser/hypothetical.js";
     assert_resolves(ctx,  "./alternate-files-main-rel",
