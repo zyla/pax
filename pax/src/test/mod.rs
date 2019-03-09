@@ -139,6 +139,14 @@ fn fixture_path() -> PathBuf {
     path
 }
 
+enum Resolution<'a> {
+    Y(&'a str),
+    Ignore,
+    External,
+    Fail,
+}
+use self::Resolution::*;
+
 #[test]
 fn test_resolve_path_or_module() {
     fn path_resolves(from: &str, to: Option<&str>, input_options: &InputOptions) {
@@ -257,18 +265,23 @@ fn test_resolve_path_or_module() {
     path_resolves("resolve/named-jsz", None, &cjs);
 }
 
-fn assert_resolves(context: &str, from: &str, to: Option<&str>, input_options: &InputOptions) {
+fn assert_resolves(context: &str, from: &str, to: Resolution, input_options: &InputOptions) {
     let base_path = fixture_path();
-    let to_path = to.map(|to| {
-        let mut to_path = base_path.clone();
-        to_path.append_resolving(to);
-        to_path
-    });
+    let expected = match to {
+        Y(to) => {
+            let mut to_path = base_path.clone();
+            to_path.append_resolving(to);
+            Some(Resolved::Normal(to_path))
+        }
+        Ignore => Some(Resolved::Ignore),
+        External => Some(Resolved::External),
+        Fail => None,
+    };
     let mut context_path = base_path;
     context_path.append_resolving(context);
 
     let resolver = Resolver::new(input_options.clone());
-    if let Some(expected) = to_path.map(Resolved::Normal) {
+    if let Some(expected) = expected {
         // resolves with an empty cache...
         assert_eq!(resolver.resolve(&context_path, from).unwrap(), expected);
         // ...and with everything cached
@@ -290,7 +303,7 @@ fn test_resolve_unicode() {
   test_resolve_unicode_with(assert_resolves);
 }
 fn test_resolve_with<F>(mut assert_resolves: F)
-where F: FnMut(&str, &str, Option<&str>, &InputOptions) {
+where F: FnMut(&str, &str, Resolution<'static>, &InputOptions) {
     let cjs = InputOptions {
         for_browser: false,
         es6_syntax: false,
@@ -308,424 +321,424 @@ where F: FnMut(&str, &str, Option<&str>, &InputOptions) {
 
     let ctx = "resolve/hypothetical.js";
     assert_resolves(ctx, "./named-noext",
-              Some("resolve/named-noext"), &cjs);
+                 Y("resolve/named-noext"), &cjs);
     assert_resolves(ctx, "./named-js.js",
-              Some("resolve/named-js.js"), &cjs);
+                 Y("resolve/named-js.js"), &cjs);
     assert_resolves(ctx, "./named-json.json",
-              Some("resolve/named-json.json"), &cjs);
+                 Y("resolve/named-json.json"), &cjs);
     assert_resolves(ctx, "./named-mjs.mjs",
-              Some("resolve/named-mjs.mjs"), &esm);
+                 Y("resolve/named-mjs.mjs"), &esm);
     assert_resolves(ctx, "./named-jsz.jsz",
-              Some("resolve/named-jsz.jsz"), &cjs);
+                 Y("resolve/named-jsz.jsz"), &cjs);
 
     assert_resolves(ctx, "./named-js",
-              Some("resolve/named-js.js"), &cjs);
+                 Y("resolve/named-js.js"), &cjs);
     assert_resolves(ctx, "./named-json",
-              Some("resolve/named-json.json"), &cjs);
+                 Y("resolve/named-json.json"), &cjs);
     assert_resolves(ctx, "./named-mjs",
-              Some("resolve/named-mjs.mjs"), &esm);
+                 Y("resolve/named-mjs.mjs"), &esm);
 
     assert_resolves(ctx, "./dir-js",
-              Some("resolve/dir-js/index.js"), &cjs);
+                 Y("resolve/dir-js/index.js"), &cjs);
     assert_resolves(ctx, "./dir-js/index",
-              Some("resolve/dir-js/index.js"), &cjs);
+                 Y("resolve/dir-js/index.js"), &cjs);
     assert_resolves(ctx, "./dir-json",
-              Some("resolve/dir-json/index.json"), &cjs);
+                 Y("resolve/dir-json/index.json"), &cjs);
     assert_resolves(ctx, "./dir-json/index",
-              Some("resolve/dir-json/index.json"), &cjs);
+                 Y("resolve/dir-json/index.json"), &cjs);
     assert_resolves(ctx, "./dir-mjs",
-              Some("resolve/dir-mjs/index.mjs"), &esm);
+                 Y("resolve/dir-mjs/index.mjs"), &esm);
     assert_resolves(ctx, "./dir-mjs/index",
-              Some("resolve/dir-mjs/index.mjs"), &esm);
+                 Y("resolve/dir-mjs/index.mjs"), &esm);
 
     assert_resolves(ctx, "./mod-noext-bare",
-              Some("resolve/mod-noext-bare/main-noext"), &cjs);
+                 Y("resolve/mod-noext-bare/main-noext"), &cjs);
     assert_resolves(ctx, "./mod-noext-rel",
-              Some("resolve/mod-noext-rel/main-noext"), &cjs);
+                 Y("resolve/mod-noext-rel/main-noext"), &cjs);
 
     assert_resolves(ctx, "./mod-main-nesting-bare",
-              Some("resolve/mod-main-nesting-bare/subdir/index.js"), &cjs);
+                 Y("resolve/mod-main-nesting-bare/subdir/index.js"), &cjs);
     assert_resolves(ctx, "./mod-main-nesting-bare/subdir",
-              Some("resolve/mod-main-nesting-bare/subdir/inner-main.js"), &cjs);
+                 Y("resolve/mod-main-nesting-bare/subdir/inner-main.js"), &cjs);
     assert_resolves(ctx, "./mod-main-nesting-rel",
-              Some("resolve/mod-main-nesting-rel/subdir/index.js"), &cjs);
+                 Y("resolve/mod-main-nesting-rel/subdir/index.js"), &cjs);
     assert_resolves(ctx, "./mod-main-nesting-rel/subdir",
-              Some("resolve/mod-main-nesting-rel/subdir/inner-main.js"), &cjs);
+                 Y("resolve/mod-main-nesting-rel/subdir/inner-main.js"), &cjs);
 
     assert_resolves(ctx, "./mod-js-ext-bare",
-              Some("resolve/mod-js-ext-bare/main-js.js"), &cjs);
+                 Y("resolve/mod-js-ext-bare/main-js.js"), &cjs);
     assert_resolves(ctx, "./mod-js-ext-rel",
-              Some("resolve/mod-js-ext-rel/main-js.js"), &cjs);
+                 Y("resolve/mod-js-ext-rel/main-js.js"), &cjs);
     assert_resolves(ctx, "./mod-js-noext-bare",
-              Some("resolve/mod-js-noext-bare/main-js.js"), &cjs);
+                 Y("resolve/mod-js-noext-bare/main-js.js"), &cjs);
     assert_resolves(ctx, "./mod-js-noext-rel",
-              Some("resolve/mod-js-noext-rel/main-js.js"), &cjs);
+                 Y("resolve/mod-js-noext-rel/main-js.js"), &cjs);
     assert_resolves(ctx, "./mod-js-dir-bare",
-              Some("resolve/mod-js-dir-bare/main-js/index.js"), &cjs);
+                 Y("resolve/mod-js-dir-bare/main-js/index.js"), &cjs);
     assert_resolves(ctx, "./mod-js-dir-rel",
-              Some("resolve/mod-js-dir-rel/main-js/index.js"), &cjs);
+                 Y("resolve/mod-js-dir-rel/main-js/index.js"), &cjs);
 
     assert_resolves(ctx, "./mod-json-ext-bare",
-              Some("resolve/mod-json-ext-bare/main-json.json"), &cjs);
+                 Y("resolve/mod-json-ext-bare/main-json.json"), &cjs);
     assert_resolves(ctx, "./mod-json-ext-rel",
-              Some("resolve/mod-json-ext-rel/main-json.json"), &cjs);
+                 Y("resolve/mod-json-ext-rel/main-json.json"), &cjs);
     assert_resolves(ctx, "./mod-json-noext-bare",
-              Some("resolve/mod-json-noext-bare/main-json.json"), &cjs);
+                 Y("resolve/mod-json-noext-bare/main-json.json"), &cjs);
     assert_resolves(ctx, "./mod-json-noext-rel",
-              Some("resolve/mod-json-noext-rel/main-json.json"), &cjs);
+                 Y("resolve/mod-json-noext-rel/main-json.json"), &cjs);
     assert_resolves(ctx, "./mod-json-dir-bare",
-              Some("resolve/mod-json-dir-bare/main-json/index.json"), &cjs);
+                 Y("resolve/mod-json-dir-bare/main-json/index.json"), &cjs);
     assert_resolves(ctx, "./mod-json-dir-rel",
-              Some("resolve/mod-json-dir-rel/main-json/index.json"), &cjs);
+                 Y("resolve/mod-json-dir-rel/main-json/index.json"), &cjs);
 
     assert_resolves(ctx, "./mod-mjs-ext-bare",
-              Some("resolve/mod-mjs-ext-bare/main-mjs.mjs"), &esm);
+                 Y("resolve/mod-mjs-ext-bare/main-mjs.mjs"), &esm);
     assert_resolves(ctx, "./mod-mjs-ext-rel",
-              Some("resolve/mod-mjs-ext-rel/main-mjs.mjs"), &esm);
+                 Y("resolve/mod-mjs-ext-rel/main-mjs.mjs"), &esm);
     assert_resolves(ctx, "./mod-mjs-noext-bare",
-              Some("resolve/mod-mjs-noext-bare/main-mjs.mjs"), &esm);
+                 Y("resolve/mod-mjs-noext-bare/main-mjs.mjs"), &esm);
     assert_resolves(ctx, "./mod-mjs-noext-rel",
-              Some("resolve/mod-mjs-noext-rel/main-mjs.mjs"), &esm);
+                 Y("resolve/mod-mjs-noext-rel/main-mjs.mjs"), &esm);
     assert_resolves(ctx, "./mod-mjs-dir-bare",
-              Some("resolve/mod-mjs-dir-bare/main-mjs/index.mjs"), &esm);
+                 Y("resolve/mod-mjs-dir-bare/main-mjs/index.mjs"), &esm);
     assert_resolves(ctx, "./mod-mjs-dir-rel",
-              Some("resolve/mod-mjs-dir-rel/main-mjs/index.mjs"), &esm);
+                 Y("resolve/mod-mjs-dir-rel/main-mjs/index.mjs"), &esm);
 
     assert_resolves(ctx, "./mod-js-slash-bare",
-              Some("resolve/mod-js-slash-bare/main.js"), &cjs);
+                 Y("resolve/mod-js-slash-bare/main.js"), &cjs);
     assert_resolves(ctx, "./mod-js-slash-rel",
-              Some("resolve/mod-js-slash-rel/main.js"), &cjs);
+                 Y("resolve/mod-js-slash-rel/main.js"), &cjs);
 
-    assert_resolves(ctx, "./named-jsz", None, &cjs);
+    assert_resolves(ctx, "./named-jsz", Fail, &cjs);
 
     assert_resolves(ctx, "./file-and-dir",
-              Some("resolve/file-and-dir.js"), &cjs);
+                 Y("resolve/file-and-dir.js"), &cjs);
     assert_resolves(ctx, "./file-and-dir/",
-              Some("resolve/file-and-dir/index.js"), &cjs);
+                 Y("resolve/file-and-dir/index.js"), &cjs);
     assert_resolves(ctx, "./file-and-mod",
-              Some("resolve/file-and-mod.js"), &cjs);
+                 Y("resolve/file-and-mod.js"), &cjs);
     assert_resolves(ctx, "./file-and-mod/",
-              Some("resolve/file-and-mod/main.js"), &cjs);
+                 Y("resolve/file-and-mod/main.js"), &cjs);
     assert_resolves(ctx, "./dir-js/",
-              Some("resolve/dir-js/index.js"), &cjs);
+                 Y("resolve/dir-js/index.js"), &cjs);
     assert_resolves(ctx, "./mod-js-noext-rel/",
-              Some("resolve/mod-js-noext-rel/main-js.js"), &cjs);
-    assert_resolves(ctx, "./named-js.js/", None, &cjs);
-    assert_resolves(ctx, "./named-js/", None, &cjs);
-    assert_resolves(ctx, "./named-noext/", None, &cjs);
+                 Y("resolve/mod-js-noext-rel/main-js.js"), &cjs);
+    assert_resolves(ctx, "./named-js.js/", Fail, &cjs);
+    assert_resolves(ctx, "./named-js/", Fail, &cjs);
+    assert_resolves(ctx, "./named-noext/", Fail, &cjs);
 
     let ctx = "resolve/subdir/hypothetical.js";
-    assert_resolves(ctx, "./named-js", None, &cjs);
+    assert_resolves(ctx, "./named-js", Fail, &cjs);
 
     assert_resolves(ctx, "../named-noext",
-               Some("resolve/named-noext"), &cjs);
+                  Y("resolve/named-noext"), &cjs);
     assert_resolves(ctx, "../named-js.js",
-               Some("resolve/named-js.js"), &cjs);
+                  Y("resolve/named-js.js"), &cjs);
     assert_resolves(ctx, "../named-json.json",
-               Some("resolve/named-json.json"), &cjs);
+                  Y("resolve/named-json.json"), &cjs);
     assert_resolves(ctx, "../named-mjs.mjs",
-               Some("resolve/named-mjs.mjs"), &esm);
+                  Y("resolve/named-mjs.mjs"), &esm);
     assert_resolves(ctx, "../named-jsz.jsz",
-               Some("resolve/named-jsz.jsz"), &cjs);
+                  Y("resolve/named-jsz.jsz"), &cjs);
 
     assert_resolves(ctx, "../named-js",
-               Some("resolve/named-js.js"), &cjs);
+                  Y("resolve/named-js.js"), &cjs);
     assert_resolves(ctx, "../named-json",
-               Some("resolve/named-json.json"), &cjs);
+                  Y("resolve/named-json.json"), &cjs);
     assert_resolves(ctx, "../named-mjs",
-               Some("resolve/named-mjs.mjs"), &esm);
+                  Y("resolve/named-mjs.mjs"), &esm);
 
     assert_resolves(ctx, "../dir-js",
-               Some("resolve/dir-js/index.js"), &cjs);
+                  Y("resolve/dir-js/index.js"), &cjs);
     assert_resolves(ctx, "../dir-js/index",
-               Some("resolve/dir-js/index.js"), &cjs);
+                  Y("resolve/dir-js/index.js"), &cjs);
     assert_resolves(ctx, "../dir-json",
-               Some("resolve/dir-json/index.json"), &cjs);
+                  Y("resolve/dir-json/index.json"), &cjs);
     assert_resolves(ctx, "../dir-json/index",
-               Some("resolve/dir-json/index.json"), &cjs);
+                  Y("resolve/dir-json/index.json"), &cjs);
     assert_resolves(ctx, "../dir-mjs",
-               Some("resolve/dir-mjs/index.mjs"), &esm);
+                  Y("resolve/dir-mjs/index.mjs"), &esm);
     assert_resolves(ctx, "../dir-mjs/index",
-               Some("resolve/dir-mjs/index.mjs"), &esm);
+                  Y("resolve/dir-mjs/index.mjs"), &esm);
 
     assert_resolves(ctx, "../mod-noext-bare",
-               Some("resolve/mod-noext-bare/main-noext"), &cjs);
+                  Y("resolve/mod-noext-bare/main-noext"), &cjs);
     assert_resolves(ctx, "../mod-noext-rel",
-               Some("resolve/mod-noext-rel/main-noext"), &cjs);
+                  Y("resolve/mod-noext-rel/main-noext"), &cjs);
 
     assert_resolves(ctx, "../mod-main-nesting-bare",
-               Some("resolve/mod-main-nesting-bare/subdir/index.js"), &cjs);
+                  Y("resolve/mod-main-nesting-bare/subdir/index.js"), &cjs);
     assert_resolves(ctx, "../mod-main-nesting-bare/subdir",
-               Some("resolve/mod-main-nesting-bare/subdir/inner-main.js"), &cjs);
+                  Y("resolve/mod-main-nesting-bare/subdir/inner-main.js"), &cjs);
     assert_resolves(ctx, "../mod-main-nesting-rel",
-               Some("resolve/mod-main-nesting-rel/subdir/index.js"), &cjs);
+                  Y("resolve/mod-main-nesting-rel/subdir/index.js"), &cjs);
     assert_resolves(ctx, "../mod-main-nesting-rel/subdir",
-               Some("resolve/mod-main-nesting-rel/subdir/inner-main.js"), &cjs);
+                  Y("resolve/mod-main-nesting-rel/subdir/inner-main.js"), &cjs);
 
     assert_resolves(ctx, "../mod-js-ext-bare",
-               Some("resolve/mod-js-ext-bare/main-js.js"), &cjs);
+                  Y("resolve/mod-js-ext-bare/main-js.js"), &cjs);
     assert_resolves(ctx, "../mod-js-ext-rel",
-               Some("resolve/mod-js-ext-rel/main-js.js"), &cjs);
+                  Y("resolve/mod-js-ext-rel/main-js.js"), &cjs);
     assert_resolves(ctx, "../mod-js-noext-bare",
-               Some("resolve/mod-js-noext-bare/main-js.js"), &cjs);
+                  Y("resolve/mod-js-noext-bare/main-js.js"), &cjs);
     assert_resolves(ctx, "../mod-js-noext-rel",
-               Some("resolve/mod-js-noext-rel/main-js.js"), &cjs);
+                  Y("resolve/mod-js-noext-rel/main-js.js"), &cjs);
     assert_resolves(ctx, "../mod-js-dir-bare",
-               Some("resolve/mod-js-dir-bare/main-js/index.js"), &cjs);
+                  Y("resolve/mod-js-dir-bare/main-js/index.js"), &cjs);
     assert_resolves(ctx, "../mod-js-dir-rel",
-               Some("resolve/mod-js-dir-rel/main-js/index.js"), &cjs);
+                  Y("resolve/mod-js-dir-rel/main-js/index.js"), &cjs);
 
     assert_resolves(ctx, "../mod-json-ext-bare",
-               Some("resolve/mod-json-ext-bare/main-json.json"), &cjs);
+                  Y("resolve/mod-json-ext-bare/main-json.json"), &cjs);
     assert_resolves(ctx, "../mod-json-ext-rel",
-               Some("resolve/mod-json-ext-rel/main-json.json"), &cjs);
+                  Y("resolve/mod-json-ext-rel/main-json.json"), &cjs);
     assert_resolves(ctx, "../mod-json-noext-bare",
-               Some("resolve/mod-json-noext-bare/main-json.json"), &cjs);
+                  Y("resolve/mod-json-noext-bare/main-json.json"), &cjs);
     assert_resolves(ctx, "../mod-json-noext-rel",
-               Some("resolve/mod-json-noext-rel/main-json.json"), &cjs);
+                  Y("resolve/mod-json-noext-rel/main-json.json"), &cjs);
     assert_resolves(ctx, "../mod-json-dir-bare",
-               Some("resolve/mod-json-dir-bare/main-json/index.json"), &cjs);
+                  Y("resolve/mod-json-dir-bare/main-json/index.json"), &cjs);
     assert_resolves(ctx, "../mod-json-dir-rel",
-               Some("resolve/mod-json-dir-rel/main-json/index.json"), &cjs);
+                  Y("resolve/mod-json-dir-rel/main-json/index.json"), &cjs);
 
     assert_resolves(ctx, "../mod-mjs-ext-bare",
-               Some("resolve/mod-mjs-ext-bare/main-mjs.mjs"), &esm);
+                  Y("resolve/mod-mjs-ext-bare/main-mjs.mjs"), &esm);
     assert_resolves(ctx, "../mod-mjs-ext-rel",
-               Some("resolve/mod-mjs-ext-rel/main-mjs.mjs"), &esm);
+                  Y("resolve/mod-mjs-ext-rel/main-mjs.mjs"), &esm);
     assert_resolves(ctx, "../mod-mjs-noext-bare",
-               Some("resolve/mod-mjs-noext-bare/main-mjs.mjs"), &esm);
+                  Y("resolve/mod-mjs-noext-bare/main-mjs.mjs"), &esm);
     assert_resolves(ctx, "../mod-mjs-noext-rel",
-               Some("resolve/mod-mjs-noext-rel/main-mjs.mjs"), &esm);
+                  Y("resolve/mod-mjs-noext-rel/main-mjs.mjs"), &esm);
     assert_resolves(ctx, "../mod-mjs-dir-bare",
-               Some("resolve/mod-mjs-dir-bare/main-mjs/index.mjs"), &esm);
+                  Y("resolve/mod-mjs-dir-bare/main-mjs/index.mjs"), &esm);
     assert_resolves(ctx, "../mod-mjs-dir-rel",
-               Some("resolve/mod-mjs-dir-rel/main-mjs/index.mjs"), &esm);
+                  Y("resolve/mod-mjs-dir-rel/main-mjs/index.mjs"), &esm);
 
     assert_resolves(ctx, "../mod-js-slash-bare",
-               Some("resolve/mod-js-slash-bare/main.js"), &cjs);
+                  Y("resolve/mod-js-slash-bare/main.js"), &cjs);
     assert_resolves(ctx, "../mod-js-slash-rel",
-               Some("resolve/mod-js-slash-rel/main.js"), &cjs);
+                  Y("resolve/mod-js-slash-rel/main.js"), &cjs);
 
-    assert_resolves(ctx, "../named-jsz", None, &cjs);
+    assert_resolves(ctx, "../named-jsz", Fail, &cjs);
 
     assert_resolves(ctx, "../file-and-dir",
-               Some("resolve/file-and-dir.js"), &cjs);
+                  Y("resolve/file-and-dir.js"), &cjs);
     assert_resolves(ctx, "../file-and-dir/",
-               Some("resolve/file-and-dir/index.js"), &cjs);
+                  Y("resolve/file-and-dir/index.js"), &cjs);
     assert_resolves(ctx, "../file-and-mod",
-               Some("resolve/file-and-mod.js"), &cjs);
+                  Y("resolve/file-and-mod.js"), &cjs);
     assert_resolves(ctx, "../file-and-mod/",
-               Some("resolve/file-and-mod/main.js"), &cjs);
+                  Y("resolve/file-and-mod/main.js"), &cjs);
     assert_resolves(ctx, "../dir-js/",
-               Some("resolve/dir-js/index.js"), &cjs);
+                  Y("resolve/dir-js/index.js"), &cjs);
     assert_resolves(ctx, "../mod-js-noext-rel/",
-               Some("resolve/mod-js-noext-rel/main-js.js"), &cjs);
-    assert_resolves(ctx, "../named-js.js/", None, &cjs);
-    assert_resolves(ctx, "../named-js/", None, &cjs);
-    assert_resolves(ctx, "../named-noext/", None, &cjs);
+                  Y("resolve/mod-js-noext-rel/main-js.js"), &cjs);
+    assert_resolves(ctx, "../named-js.js/", Fail, &cjs);
+    assert_resolves(ctx, "../named-js/", Fail, &cjs);
+    assert_resolves(ctx, "../named-noext/", Fail, &cjs);
 
     assert_resolves(ctx, "../mod-self-slash",
-               Some("resolve/mod-self-slash/index.js"), &esm);
+                  Y("resolve/mod-self-slash/index.js"), &esm);
     assert_resolves(ctx, "../mod-self-slash/",
-               Some("resolve/mod-self-slash/index.js"), &esm);
+                  Y("resolve/mod-self-slash/index.js"), &esm);
     assert_resolves(ctx, "../mod-self-noslash",
-               Some("resolve/mod-self-noslash/index.js"), &esm);
+                  Y("resolve/mod-self-noslash/index.js"), &esm);
     assert_resolves(ctx, "../mod-self-noslash/",
-               Some("resolve/mod-self-noslash/index.js"), &esm);
+                  Y("resolve/mod-self-noslash/index.js"), &esm);
     assert_resolves(ctx, "../mod-outer/mod-parent-slash",
-               Some("resolve/mod-outer/index.js"), &esm);
+                  Y("resolve/mod-outer/index.js"), &esm);
     assert_resolves(ctx, "../mod-outer/mod-parent-slash/",
-               Some("resolve/mod-outer/index.js"), &esm);
+                  Y("resolve/mod-outer/index.js"), &esm);
     assert_resolves(ctx, "../mod-outer/mod-parent-noslash",
-               Some("resolve/mod-outer/index.js"), &esm);
+                  Y("resolve/mod-outer/index.js"), &esm);
     assert_resolves(ctx, "../mod-outer/mod-parent-noslash/",
-               Some("resolve/mod-outer/index.js"), &esm);
+                  Y("resolve/mod-outer/index.js"), &esm);
     assert_resolves("resolve/mod-outer/mod-parent-slash/hypothetical.js", "..",
-               Some("resolve/mod-outer/main.js"), &esm);
+                  Y("resolve/mod-outer/main.js"), &esm);
     assert_resolves("resolve/mod-outer/mod-parent-slash/hypothetical.js", "../",
-               Some("resolve/mod-outer/main.js"), &esm);
+                  Y("resolve/mod-outer/main.js"), &esm);
     assert_resolves("resolve/mod-outer/mod-parent-noslash/hypothetical.js", "..",
-               Some("resolve/mod-outer/main.js"), &esm);
+                  Y("resolve/mod-outer/main.js"), &esm);
     assert_resolves("resolve/mod-outer/mod-parent-noslash/hypothetical.js", "../",
-               Some("resolve/mod-outer/main.js"), &esm);
+                  Y("resolve/mod-outer/main.js"), &esm);
 
     assert_resolves("resolve/dir-js/hypothetical.js", ".",
-               Some("resolve/dir-js/index.js"), &cjs);
+                  Y("resolve/dir-js/index.js"), &cjs);
     assert_resolves("resolve/dir-js/hypothetical.js", "./",
-               Some("resolve/dir-js/index.js"), &cjs);
+                  Y("resolve/dir-js/index.js"), &cjs);
     assert_resolves("resolve/dir-json/hypothetical.js", ".",
-               Some("resolve/dir-json/index.json"), &cjs);
+                  Y("resolve/dir-json/index.json"), &cjs);
     assert_resolves("resolve/dir-json/hypothetical.js", "./",
-               Some("resolve/dir-json/index.json"), &cjs);
+                  Y("resolve/dir-json/index.json"), &cjs);
     assert_resolves("resolve/dir-mjs/hypothetical.js", ".",
-               Some("resolve/dir-mjs/index.mjs"), &esm);
+                  Y("resolve/dir-mjs/index.mjs"), &esm);
     assert_resolves("resolve/dir-mjs/hypothetical.js", "./",
-               Some("resolve/dir-mjs/index.mjs"), &esm);
+                  Y("resolve/dir-mjs/index.mjs"), &esm);
 
     assert_resolves("resolve/mod-noext-bare/hypothetical.js", ".",
-               Some("resolve/mod-noext-bare/main-noext"), &cjs);
+                  Y("resolve/mod-noext-bare/main-noext"), &cjs);
     assert_resolves("resolve/mod-noext-bare/hypothetical.js", "./",
-               Some("resolve/mod-noext-bare/main-noext"), &cjs);
+                  Y("resolve/mod-noext-bare/main-noext"), &cjs);
     assert_resolves("resolve/mod-noext-rel/hypothetical.js", ".",
-               Some("resolve/mod-noext-rel/main-noext"), &cjs);
+                  Y("resolve/mod-noext-rel/main-noext"), &cjs);
     assert_resolves("resolve/mod-noext-rel/hypothetical.js", "./",
-               Some("resolve/mod-noext-rel/main-noext"), &cjs);
+                  Y("resolve/mod-noext-rel/main-noext"), &cjs);
 
     assert_resolves("resolve/mod-main-nesting-bare/hypothetical.js", ".",
-               Some("resolve/mod-main-nesting-bare/subdir/index.js"), &cjs);
+                  Y("resolve/mod-main-nesting-bare/subdir/index.js"), &cjs);
     assert_resolves("resolve/mod-main-nesting-bare/hypothetical.js", "./",
-               Some("resolve/mod-main-nesting-bare/subdir/index.js"), &cjs);
+                  Y("resolve/mod-main-nesting-bare/subdir/index.js"), &cjs);
     assert_resolves("resolve/mod-main-nesting-bare/subdir/hypothetical.js", ".",
-               Some("resolve/mod-main-nesting-bare/subdir/inner-main.js"), &cjs);
+                  Y("resolve/mod-main-nesting-bare/subdir/inner-main.js"), &cjs);
     assert_resolves("resolve/mod-main-nesting-bare/subdir/hypothetical.js", "./",
-               Some("resolve/mod-main-nesting-bare/subdir/inner-main.js"), &cjs);
+                  Y("resolve/mod-main-nesting-bare/subdir/inner-main.js"), &cjs);
     assert_resolves("resolve/mod-main-nesting-rel/hypothetical.js", ".",
-               Some("resolve/mod-main-nesting-rel/subdir/index.js"), &cjs);
+                  Y("resolve/mod-main-nesting-rel/subdir/index.js"), &cjs);
     assert_resolves("resolve/mod-main-nesting-rel/hypothetical.js", "./",
-               Some("resolve/mod-main-nesting-rel/subdir/index.js"), &cjs);
+                  Y("resolve/mod-main-nesting-rel/subdir/index.js"), &cjs);
     assert_resolves("resolve/mod-main-nesting-rel/subdir/hypothetical.js", "..",
-               Some("resolve/mod-main-nesting-rel/subdir/index.js"), &cjs);
+                  Y("resolve/mod-main-nesting-rel/subdir/index.js"), &cjs);
     assert_resolves("resolve/mod-main-nesting-rel/subdir/hypothetical.js", "../",
-               Some("resolve/mod-main-nesting-rel/subdir/index.js"), &cjs);
+                  Y("resolve/mod-main-nesting-rel/subdir/index.js"), &cjs);
     assert_resolves("resolve/mod-main-nesting-rel/subdir/hypothetical.js", ".",
-               Some("resolve/mod-main-nesting-rel/subdir/inner-main.js"), &cjs);
+                  Y("resolve/mod-main-nesting-rel/subdir/inner-main.js"), &cjs);
     assert_resolves("resolve/mod-main-nesting-rel/subdir/hypothetical.js", "./",
-               Some("resolve/mod-main-nesting-rel/subdir/inner-main.js"), &cjs);
+                  Y("resolve/mod-main-nesting-rel/subdir/inner-main.js"), &cjs);
 
     assert_resolves("resolve/mod-js-ext-bare/hypothetical.js", ".",
-               Some("resolve/mod-js-ext-bare/main-js.js"), &cjs);
+                  Y("resolve/mod-js-ext-bare/main-js.js"), &cjs);
     assert_resolves("resolve/mod-js-ext-bare/hypothetical.js", "./",
-               Some("resolve/mod-js-ext-bare/main-js.js"), &cjs);
+                  Y("resolve/mod-js-ext-bare/main-js.js"), &cjs);
     assert_resolves("resolve/mod-js-ext-rel/hypothetical.js", ".",
-               Some("resolve/mod-js-ext-rel/main-js.js"), &cjs);
+                  Y("resolve/mod-js-ext-rel/main-js.js"), &cjs);
     assert_resolves("resolve/mod-js-ext-rel/hypothetical.js", "./",
-               Some("resolve/mod-js-ext-rel/main-js.js"), &cjs);
+                  Y("resolve/mod-js-ext-rel/main-js.js"), &cjs);
     assert_resolves("resolve/mod-js-noext-bare/hypothetical.js", ".",
-               Some("resolve/mod-js-noext-bare/main-js.js"), &cjs);
+                  Y("resolve/mod-js-noext-bare/main-js.js"), &cjs);
     assert_resolves("resolve/mod-js-noext-bare/hypothetical.js", "./",
-               Some("resolve/mod-js-noext-bare/main-js.js"), &cjs);
+                  Y("resolve/mod-js-noext-bare/main-js.js"), &cjs);
     assert_resolves("resolve/mod-js-noext-rel/hypothetical.js", ".",
-               Some("resolve/mod-js-noext-rel/main-js.js"), &cjs);
+                  Y("resolve/mod-js-noext-rel/main-js.js"), &cjs);
     assert_resolves("resolve/mod-js-noext-rel/hypothetical.js", "./",
-               Some("resolve/mod-js-noext-rel/main-js.js"), &cjs);
+                  Y("resolve/mod-js-noext-rel/main-js.js"), &cjs);
     assert_resolves("resolve/mod-js-dir-bare/hypothetical.js", ".",
-               Some("resolve/mod-js-dir-bare/main-js/index.js"), &cjs);
+                  Y("resolve/mod-js-dir-bare/main-js/index.js"), &cjs);
     assert_resolves("resolve/mod-js-dir-bare/hypothetical.js", "./",
-               Some("resolve/mod-js-dir-bare/main-js/index.js"), &cjs);
+                  Y("resolve/mod-js-dir-bare/main-js/index.js"), &cjs);
     assert_resolves("resolve/mod-js-dir-bare/main-js/hypothetical.js", "..",
-               Some("resolve/mod-js-dir-bare/main-js/index.js"), &cjs);
+                  Y("resolve/mod-js-dir-bare/main-js/index.js"), &cjs);
     assert_resolves("resolve/mod-js-dir-bare/main-js/hypothetical.js", "../",
-               Some("resolve/mod-js-dir-bare/main-js/index.js"), &cjs);
+                  Y("resolve/mod-js-dir-bare/main-js/index.js"), &cjs);
     assert_resolves("resolve/mod-js-dir-rel/hypothetical.js", ".",
-               Some("resolve/mod-js-dir-rel/main-js/index.js"), &cjs);
+                  Y("resolve/mod-js-dir-rel/main-js/index.js"), &cjs);
     assert_resolves("resolve/mod-js-dir-rel/hypothetical.js", "./",
-               Some("resolve/mod-js-dir-rel/main-js/index.js"), &cjs);
+                  Y("resolve/mod-js-dir-rel/main-js/index.js"), &cjs);
     assert_resolves("resolve/mod-js-dir-rel/main-js/hypothetical.js", "..",
-               Some("resolve/mod-js-dir-rel/main-js/index.js"), &cjs);
+                  Y("resolve/mod-js-dir-rel/main-js/index.js"), &cjs);
     assert_resolves("resolve/mod-js-dir-rel/main-js/hypothetical.js", "../",
-               Some("resolve/mod-js-dir-rel/main-js/index.js"), &cjs);
+                  Y("resolve/mod-js-dir-rel/main-js/index.js"), &cjs);
 
     assert_resolves("resolve/mod-json-ext-bare/hypothetical.js", ".",
-               Some("resolve/mod-json-ext-bare/main-json.json"), &cjs);
+                  Y("resolve/mod-json-ext-bare/main-json.json"), &cjs);
     assert_resolves("resolve/mod-json-ext-bare/hypothetical.js", "./",
-               Some("resolve/mod-json-ext-bare/main-json.json"), &cjs);
+                  Y("resolve/mod-json-ext-bare/main-json.json"), &cjs);
     assert_resolves("resolve/mod-json-ext-rel/hypothetical.js", ".",
-               Some("resolve/mod-json-ext-rel/main-json.json"), &cjs);
+                  Y("resolve/mod-json-ext-rel/main-json.json"), &cjs);
     assert_resolves("resolve/mod-json-ext-rel/hypothetical.js", "./",
-               Some("resolve/mod-json-ext-rel/main-json.json"), &cjs);
+                  Y("resolve/mod-json-ext-rel/main-json.json"), &cjs);
     assert_resolves("resolve/mod-json-noext-bare/hypothetical.js", ".",
-               Some("resolve/mod-json-noext-bare/main-json.json"), &cjs);
+                  Y("resolve/mod-json-noext-bare/main-json.json"), &cjs);
     assert_resolves("resolve/mod-json-noext-bare/hypothetical.js", "./",
-               Some("resolve/mod-json-noext-bare/main-json.json"), &cjs);
+                  Y("resolve/mod-json-noext-bare/main-json.json"), &cjs);
     assert_resolves("resolve/mod-json-noext-rel/hypothetical.js", ".",
-               Some("resolve/mod-json-noext-rel/main-json.json"), &cjs);
+                  Y("resolve/mod-json-noext-rel/main-json.json"), &cjs);
     assert_resolves("resolve/mod-json-noext-rel/hypothetical.js", "./",
-               Some("resolve/mod-json-noext-rel/main-json.json"), &cjs);
+                  Y("resolve/mod-json-noext-rel/main-json.json"), &cjs);
     assert_resolves("resolve/mod-json-dir-bare/hypothetical.js", ".",
-               Some("resolve/mod-json-dir-bare/main-json/index.json"), &cjs);
+                  Y("resolve/mod-json-dir-bare/main-json/index.json"), &cjs);
     assert_resolves("resolve/mod-json-dir-bare/hypothetical.js", "./",
-               Some("resolve/mod-json-dir-bare/main-json/index.json"), &cjs);
+                  Y("resolve/mod-json-dir-bare/main-json/index.json"), &cjs);
     assert_resolves("resolve/mod-json-dir-rel/hypothetical.js", ".",
-               Some("resolve/mod-json-dir-rel/main-json/index.json"), &cjs);
+                  Y("resolve/mod-json-dir-rel/main-json/index.json"), &cjs);
     assert_resolves("resolve/mod-json-dir-rel/hypothetical.js", "./",
-               Some("resolve/mod-json-dir-rel/main-json/index.json"), &cjs);
+                  Y("resolve/mod-json-dir-rel/main-json/index.json"), &cjs);
 
     assert_resolves("resolve/mod-mjs-ext-bare/hypothetical.js", ".",
-               Some("resolve/mod-mjs-ext-bare/main-mjs.mjs"), &esm);
+                  Y("resolve/mod-mjs-ext-bare/main-mjs.mjs"), &esm);
     assert_resolves("resolve/mod-mjs-ext-bare/hypothetical.js", "./",
-               Some("resolve/mod-mjs-ext-bare/main-mjs.mjs"), &esm);
+                  Y("resolve/mod-mjs-ext-bare/main-mjs.mjs"), &esm);
     assert_resolves("resolve/mod-mjs-ext-rel/hypothetical.js", ".",
-               Some("resolve/mod-mjs-ext-rel/main-mjs.mjs"), &esm);
+                  Y("resolve/mod-mjs-ext-rel/main-mjs.mjs"), &esm);
     assert_resolves("resolve/mod-mjs-ext-rel/hypothetical.js", "./",
-               Some("resolve/mod-mjs-ext-rel/main-mjs.mjs"), &esm);
+                  Y("resolve/mod-mjs-ext-rel/main-mjs.mjs"), &esm);
     assert_resolves("resolve/mod-mjs-noext-bare/hypothetical.js", ".",
-               Some("resolve/mod-mjs-noext-bare/main-mjs.mjs"), &esm);
+                  Y("resolve/mod-mjs-noext-bare/main-mjs.mjs"), &esm);
     assert_resolves("resolve/mod-mjs-noext-bare/hypothetical.js", "./",
-               Some("resolve/mod-mjs-noext-bare/main-mjs.mjs"), &esm);
+                  Y("resolve/mod-mjs-noext-bare/main-mjs.mjs"), &esm);
     assert_resolves("resolve/mod-mjs-noext-rel/hypothetical.js", ".",
-               Some("resolve/mod-mjs-noext-rel/main-mjs.mjs"), &esm);
+                  Y("resolve/mod-mjs-noext-rel/main-mjs.mjs"), &esm);
     assert_resolves("resolve/mod-mjs-noext-rel/hypothetical.js", "./",
-               Some("resolve/mod-mjs-noext-rel/main-mjs.mjs"), &esm);
+                  Y("resolve/mod-mjs-noext-rel/main-mjs.mjs"), &esm);
     assert_resolves("resolve/mod-mjs-dir-bare/hypothetical.js", ".",
-               Some("resolve/mod-mjs-dir-bare/main-mjs/index.mjs"), &esm);
+                  Y("resolve/mod-mjs-dir-bare/main-mjs/index.mjs"), &esm);
     assert_resolves("resolve/mod-mjs-dir-bare/hypothetical.js", "./",
-               Some("resolve/mod-mjs-dir-bare/main-mjs/index.mjs"), &esm);
+                  Y("resolve/mod-mjs-dir-bare/main-mjs/index.mjs"), &esm);
     assert_resolves("resolve/mod-mjs-dir-bare/main-mjs/hypothetical.js", "..",
-               Some("resolve/mod-mjs-dir-bare/main-mjs/index.mjs"), &esm);
+                  Y("resolve/mod-mjs-dir-bare/main-mjs/index.mjs"), &esm);
     assert_resolves("resolve/mod-mjs-dir-bare/main-mjs/hypothetical.js", "../",
-               Some("resolve/mod-mjs-dir-bare/main-mjs/index.mjs"), &esm);
+                  Y("resolve/mod-mjs-dir-bare/main-mjs/index.mjs"), &esm);
     assert_resolves("resolve/mod-mjs-dir-rel/hypothetical.js", ".",
-               Some("resolve/mod-mjs-dir-rel/main-mjs/index.mjs"), &esm);
+                  Y("resolve/mod-mjs-dir-rel/main-mjs/index.mjs"), &esm);
     assert_resolves("resolve/mod-mjs-dir-rel/hypothetical.js", "./",
-               Some("resolve/mod-mjs-dir-rel/main-mjs/index.mjs"), &esm);
+                  Y("resolve/mod-mjs-dir-rel/main-mjs/index.mjs"), &esm);
     assert_resolves("resolve/mod-mjs-dir-rel/main-mjs/hypothetical.js", "..",
-               Some("resolve/mod-mjs-dir-rel/main-mjs/index.mjs"), &esm);
+                  Y("resolve/mod-mjs-dir-rel/main-mjs/index.mjs"), &esm);
     assert_resolves("resolve/mod-mjs-dir-rel/main-mjs/hypothetical.js", "../",
-               Some("resolve/mod-mjs-dir-rel/main-mjs/index.mjs"), &esm);
+                  Y("resolve/mod-mjs-dir-rel/main-mjs/index.mjs"), &esm);
 
     assert_resolves("resolve/mod-js-slash-bare/hypothetical.js", ".",
-               Some("resolve/mod-js-slash-bare/main.js"), &cjs);
+                  Y("resolve/mod-js-slash-bare/main.js"), &cjs);
     assert_resolves("resolve/mod-js-slash-bare/hypothetical.js", "./",
-               Some("resolve/mod-js-slash-bare/main.js"), &cjs);
+                  Y("resolve/mod-js-slash-bare/main.js"), &cjs);
     assert_resolves("resolve/mod-js-slash-bare/main/hypothetical.js", "..",
-               Some("resolve/mod-js-slash-bare/main.js"), &cjs);
+                  Y("resolve/mod-js-slash-bare/main.js"), &cjs);
     assert_resolves("resolve/mod-js-slash-bare/main/hypothetical.js", "../",
-               Some("resolve/mod-js-slash-bare/main.js"), &cjs);
+                  Y("resolve/mod-js-slash-bare/main.js"), &cjs);
     assert_resolves("resolve/mod-js-slash-rel/hypothetical.js", ".",
-               Some("resolve/mod-js-slash-rel/main.js"), &cjs);
+                  Y("resolve/mod-js-slash-rel/main.js"), &cjs);
     assert_resolves("resolve/mod-js-slash-rel/hypothetical.js", "./",
-               Some("resolve/mod-js-slash-rel/main.js"), &cjs);
+                  Y("resolve/mod-js-slash-rel/main.js"), &cjs);
     assert_resolves("resolve/mod-js-slash-rel/main/hypothetical.js", "..",
-               Some("resolve/mod-js-slash-rel/main.js"), &cjs);
+                  Y("resolve/mod-js-slash-rel/main.js"), &cjs);
     assert_resolves("resolve/mod-js-slash-rel/main/hypothetical.js", "../",
-               Some("resolve/mod-js-slash-rel/main.js"), &cjs);
+                  Y("resolve/mod-js-slash-rel/main.js"), &cjs);
 
     assert_resolves("resolve/file-and-dir/hypothetical.js", ".",
-               Some("resolve/file-and-dir/index.js"), &cjs);
+                  Y("resolve/file-and-dir/index.js"), &cjs);
     assert_resolves("resolve/file-and-dir/hypothetical.js", "./",
-               Some("resolve/file-and-dir/index.js"), &cjs);
+                  Y("resolve/file-and-dir/index.js"), &cjs);
     assert_resolves("resolve/file-and-dir/subdir/hypothetical.js", "..",
-               Some("resolve/file-and-dir/index.js"), &cjs);
+                  Y("resolve/file-and-dir/index.js"), &cjs);
     assert_resolves("resolve/file-and-dir/subdir/hypothetical.js", "../",
-               Some("resolve/file-and-dir/index.js"), &cjs);
+                  Y("resolve/file-and-dir/index.js"), &cjs);
     assert_resolves("resolve/file-and-mod/hypothetical.js", ".",
-               Some("resolve/file-and-mod/main.js"), &cjs);
+                  Y("resolve/file-and-mod/main.js"), &cjs);
     assert_resolves("resolve/file-and-mod/hypothetical.js", "./",
-               Some("resolve/file-and-mod/main.js"), &cjs);
+                  Y("resolve/file-and-mod/main.js"), &cjs);
     assert_resolves("resolve/file-and-mod/subdir/hypothetical.js", "..",
-               Some("resolve/file-and-mod/main.js"), &cjs);
+                  Y("resolve/file-and-mod/main.js"), &cjs);
     assert_resolves("resolve/file-and-mod/subdir/hypothetical.js", "../",
-               Some("resolve/file-and-mod/main.js"), &cjs);
+                  Y("resolve/file-and-mod/main.js"), &cjs);
 
     let ctx = "resolve/hypothetical.js";
     assert_resolves(ctx, "./file-and-dir/submod",
-              Some("resolve/file-and-dir.js"), &cjs);
+                 Y("resolve/file-and-dir.js"), &cjs);
     assert_resolves(ctx, "./file-and-dir/submod/",
-              Some("resolve/file-and-dir.js"), &cjs);
+                 Y("resolve/file-and-dir.js"), &cjs);
     assert_resolves(ctx, "./file-and-mod/submod",
-              Some("resolve/file-and-mod.js"), &cjs);
+                 Y("resolve/file-and-mod.js"), &cjs);
     assert_resolves(ctx, "./file-and-mod/submod/",
-              Some("resolve/file-and-mod.js"), &cjs);
+                 Y("resolve/file-and-mod.js"), &cjs);
 
     // absolute paths
 
@@ -733,473 +746,473 @@ where F: FnMut(&str, &str, Option<&str>, &InputOptions) {
     let mut path = fixture_path();
     path.push("resolve/named-js");
     assert_resolves(ctx, path.to_str().unwrap(),
-               Some("resolve/named-js.js"), &cjs);
+                  Y("resolve/named-js.js"), &cjs);
 
     // modules
 
     let ctx = "resolve/hypothetical.js";
     assert_resolves(ctx,          "n-named-noext",
-        Some("resolve/node_modules/n-named-noext"), &cjs);
+           Y("resolve/node_modules/n-named-noext"), &cjs);
     assert_resolves(ctx,          "n-named-js.js",
-        Some("resolve/node_modules/n-named-js.js"), &cjs);
+           Y("resolve/node_modules/n-named-js.js"), &cjs);
     assert_resolves(ctx,          "n-named-json.json",
-        Some("resolve/node_modules/n-named-json.json"), &cjs);
+           Y("resolve/node_modules/n-named-json.json"), &cjs);
     assert_resolves(ctx,          "n-named-mjs.mjs",
-        Some("resolve/node_modules/n-named-mjs.mjs"), &esm);
+           Y("resolve/node_modules/n-named-mjs.mjs"), &esm);
     assert_resolves(ctx,          "n-named-jsz.jsz",
-        Some("resolve/node_modules/n-named-jsz.jsz"), &cjs);
+           Y("resolve/node_modules/n-named-jsz.jsz"), &cjs);
 
     assert_resolves(ctx,          "n-named-js",
-        Some("resolve/node_modules/n-named-js.js"), &cjs);
+           Y("resolve/node_modules/n-named-js.js"), &cjs);
     assert_resolves(ctx,          "n-named-json",
-        Some("resolve/node_modules/n-named-json.json"), &cjs);
+           Y("resolve/node_modules/n-named-json.json"), &cjs);
     assert_resolves(ctx,          "n-named-mjs",
-        Some("resolve/node_modules/n-named-mjs.mjs"), &esm);
+           Y("resolve/node_modules/n-named-mjs.mjs"), &esm);
 
     assert_resolves(ctx,          "n-dir-js",
-        Some("resolve/node_modules/n-dir-js/index.js"), &cjs);
+           Y("resolve/node_modules/n-dir-js/index.js"), &cjs);
     assert_resolves(ctx,          "n-dir-js/index",
-        Some("resolve/node_modules/n-dir-js/index.js"), &cjs);
+           Y("resolve/node_modules/n-dir-js/index.js"), &cjs);
     assert_resolves(ctx,          "n-dir-json",
-        Some("resolve/node_modules/n-dir-json/index.json"), &cjs);
+           Y("resolve/node_modules/n-dir-json/index.json"), &cjs);
     assert_resolves(ctx,          "n-dir-json/index",
-        Some("resolve/node_modules/n-dir-json/index.json"), &cjs);
+           Y("resolve/node_modules/n-dir-json/index.json"), &cjs);
     assert_resolves(ctx,          "n-dir-mjs",
-        Some("resolve/node_modules/n-dir-mjs/index.mjs"), &esm);
+           Y("resolve/node_modules/n-dir-mjs/index.mjs"), &esm);
     assert_resolves(ctx,          "n-dir-mjs/index",
-        Some("resolve/node_modules/n-dir-mjs/index.mjs"), &esm);
+           Y("resolve/node_modules/n-dir-mjs/index.mjs"), &esm);
 
     assert_resolves(ctx,          "n-mod-noext-bare",
-        Some("resolve/node_modules/n-mod-noext-bare/main-noext"), &cjs);
+           Y("resolve/node_modules/n-mod-noext-bare/main-noext"), &cjs);
     assert_resolves(ctx,          "n-mod-noext-rel",
-        Some("resolve/node_modules/n-mod-noext-rel/main-noext"), &cjs);
+           Y("resolve/node_modules/n-mod-noext-rel/main-noext"), &cjs);
 
     assert_resolves(ctx,          "n-mod-main-nesting-bare",
-        Some("resolve/node_modules/n-mod-main-nesting-bare/subdir/index.js"), &cjs);
+           Y("resolve/node_modules/n-mod-main-nesting-bare/subdir/index.js"), &cjs);
     assert_resolves(ctx,          "n-mod-main-nesting-bare/subdir",
-        Some("resolve/node_modules/n-mod-main-nesting-bare/subdir/inner-main.js"), &cjs);
+           Y("resolve/node_modules/n-mod-main-nesting-bare/subdir/inner-main.js"), &cjs);
     assert_resolves(ctx,          "n-mod-main-nesting-rel",
-        Some("resolve/node_modules/n-mod-main-nesting-rel/subdir/index.js"), &cjs);
+           Y("resolve/node_modules/n-mod-main-nesting-rel/subdir/index.js"), &cjs);
     assert_resolves(ctx,          "n-mod-main-nesting-rel/subdir",
-        Some("resolve/node_modules/n-mod-main-nesting-rel/subdir/inner-main.js"), &cjs);
+           Y("resolve/node_modules/n-mod-main-nesting-rel/subdir/inner-main.js"), &cjs);
 
     assert_resolves(ctx,          "n-mod-js-ext-bare",
-        Some("resolve/node_modules/n-mod-js-ext-bare/main-js.js"), &cjs);
+           Y("resolve/node_modules/n-mod-js-ext-bare/main-js.js"), &cjs);
     assert_resolves(ctx,          "n-mod-js-ext-rel",
-        Some("resolve/node_modules/n-mod-js-ext-rel/main-js.js"), &cjs);
+           Y("resolve/node_modules/n-mod-js-ext-rel/main-js.js"), &cjs);
     assert_resolves(ctx,          "n-mod-js-noext-bare",
-        Some("resolve/node_modules/n-mod-js-noext-bare/main-js.js"), &cjs);
+           Y("resolve/node_modules/n-mod-js-noext-bare/main-js.js"), &cjs);
     assert_resolves(ctx,          "n-mod-js-noext-rel",
-        Some("resolve/node_modules/n-mod-js-noext-rel/main-js.js"), &cjs);
+           Y("resolve/node_modules/n-mod-js-noext-rel/main-js.js"), &cjs);
     assert_resolves(ctx,          "n-mod-js-dir-bare",
-        Some("resolve/node_modules/n-mod-js-dir-bare/main-js/index.js"), &cjs);
+           Y("resolve/node_modules/n-mod-js-dir-bare/main-js/index.js"), &cjs);
     assert_resolves(ctx,          "n-mod-js-dir-rel",
-        Some("resolve/node_modules/n-mod-js-dir-rel/main-js/index.js"), &cjs);
+           Y("resolve/node_modules/n-mod-js-dir-rel/main-js/index.js"), &cjs);
 
     assert_resolves(ctx,          "n-mod-json-ext-bare",
-        Some("resolve/node_modules/n-mod-json-ext-bare/main-json.json"), &cjs);
+           Y("resolve/node_modules/n-mod-json-ext-bare/main-json.json"), &cjs);
     assert_resolves(ctx,          "n-mod-json-ext-rel",
-        Some("resolve/node_modules/n-mod-json-ext-rel/main-json.json"), &cjs);
+           Y("resolve/node_modules/n-mod-json-ext-rel/main-json.json"), &cjs);
     assert_resolves(ctx,          "n-mod-json-noext-bare",
-        Some("resolve/node_modules/n-mod-json-noext-bare/main-json.json"), &cjs);
+           Y("resolve/node_modules/n-mod-json-noext-bare/main-json.json"), &cjs);
     assert_resolves(ctx,          "n-mod-json-noext-rel",
-        Some("resolve/node_modules/n-mod-json-noext-rel/main-json.json"), &cjs);
+           Y("resolve/node_modules/n-mod-json-noext-rel/main-json.json"), &cjs);
     assert_resolves(ctx,          "n-mod-json-dir-bare",
-        Some("resolve/node_modules/n-mod-json-dir-bare/main-json/index.json"), &cjs);
+           Y("resolve/node_modules/n-mod-json-dir-bare/main-json/index.json"), &cjs);
     assert_resolves(ctx,          "n-mod-json-dir-rel",
-        Some("resolve/node_modules/n-mod-json-dir-rel/main-json/index.json"), &cjs);
+           Y("resolve/node_modules/n-mod-json-dir-rel/main-json/index.json"), &cjs);
 
     assert_resolves(ctx,          "n-mod-mjs-ext-bare",
-        Some("resolve/node_modules/n-mod-mjs-ext-bare/main-mjs.mjs"), &esm);
+           Y("resolve/node_modules/n-mod-mjs-ext-bare/main-mjs.mjs"), &esm);
     assert_resolves(ctx,          "n-mod-mjs-ext-rel",
-        Some("resolve/node_modules/n-mod-mjs-ext-rel/main-mjs.mjs"), &esm);
+           Y("resolve/node_modules/n-mod-mjs-ext-rel/main-mjs.mjs"), &esm);
     assert_resolves(ctx,          "n-mod-mjs-noext-bare",
-        Some("resolve/node_modules/n-mod-mjs-noext-bare/main-mjs.mjs"), &esm);
+           Y("resolve/node_modules/n-mod-mjs-noext-bare/main-mjs.mjs"), &esm);
     assert_resolves(ctx,          "n-mod-mjs-noext-rel",
-        Some("resolve/node_modules/n-mod-mjs-noext-rel/main-mjs.mjs"), &esm);
+           Y("resolve/node_modules/n-mod-mjs-noext-rel/main-mjs.mjs"), &esm);
     assert_resolves(ctx,          "n-mod-mjs-dir-bare",
-        Some("resolve/node_modules/n-mod-mjs-dir-bare/main-mjs/index.mjs"), &esm);
+           Y("resolve/node_modules/n-mod-mjs-dir-bare/main-mjs/index.mjs"), &esm);
     assert_resolves(ctx,          "n-mod-mjs-dir-rel",
-        Some("resolve/node_modules/n-mod-mjs-dir-rel/main-mjs/index.mjs"), &esm);
+           Y("resolve/node_modules/n-mod-mjs-dir-rel/main-mjs/index.mjs"), &esm);
 
     assert_resolves(ctx,          "n-mod-js-slash-bare",
-        Some("resolve/node_modules/n-mod-js-slash-bare/main.js"), &cjs);
+           Y("resolve/node_modules/n-mod-js-slash-bare/main.js"), &cjs);
     assert_resolves(ctx,          "n-mod-js-slash-rel",
-        Some("resolve/node_modules/n-mod-js-slash-rel/main.js"), &cjs);
+           Y("resolve/node_modules/n-mod-js-slash-rel/main.js"), &cjs);
 
-    assert_resolves(ctx,          "n-named-jsz", None, &cjs);
+    assert_resolves(ctx,          "n-named-jsz", Fail, &cjs);
 
     assert_resolves(ctx,          "n-file-and-dir",
-        Some("resolve/node_modules/n-file-and-dir.js"), &cjs);
+           Y("resolve/node_modules/n-file-and-dir.js"), &cjs);
     assert_resolves(ctx,          "n-file-and-dir/",
-        Some("resolve/node_modules/n-file-and-dir/index.js"), &cjs);
+           Y("resolve/node_modules/n-file-and-dir/index.js"), &cjs);
     assert_resolves(ctx,          "n-file-and-mod",
-        Some("resolve/node_modules/n-file-and-mod.js"), &cjs);
+           Y("resolve/node_modules/n-file-and-mod.js"), &cjs);
     assert_resolves(ctx,          "n-file-and-mod/",
-        Some("resolve/node_modules/n-file-and-mod/main.js"), &cjs);
+           Y("resolve/node_modules/n-file-and-mod/main.js"), &cjs);
     assert_resolves(ctx,          "n-dir-js/",
-        Some("resolve/node_modules/n-dir-js/index.js"), &cjs);
+           Y("resolve/node_modules/n-dir-js/index.js"), &cjs);
     assert_resolves(ctx,          "n-mod-js-noext-rel/",
-        Some("resolve/node_modules/n-mod-js-noext-rel/main-js.js"), &cjs);
-    assert_resolves(ctx,          "n-named-js.js/", None, &cjs);
-    assert_resolves(ctx,          "n-named-js/", None, &cjs);
-    assert_resolves(ctx,          "n-named-noext/", None, &cjs);
+           Y("resolve/node_modules/n-mod-js-noext-rel/main-js.js"), &cjs);
+    assert_resolves(ctx,          "n-named-js.js/", Fail, &cjs);
+    assert_resolves(ctx,          "n-named-js/", Fail, &cjs);
+    assert_resolves(ctx,          "n-named-noext/", Fail, &cjs);
 
-    assert_resolves(ctx,          "./n-named-noext", None, &cjs);
-    assert_resolves(ctx,          "./n-named-js.js", None, &cjs);
-    assert_resolves(ctx,          "./n-named-json.json", None, &cjs);
-    assert_resolves(ctx,          "./n-named-mjs.mjs", None, &esm);
-    assert_resolves(ctx,          "./n-named-jsz.jsz", None, &cjs);
+    assert_resolves(ctx,          "./n-named-noext", Fail, &cjs);
+    assert_resolves(ctx,          "./n-named-js.js", Fail, &cjs);
+    assert_resolves(ctx,          "./n-named-json.json", Fail, &cjs);
+    assert_resolves(ctx,          "./n-named-mjs.mjs", Fail, &esm);
+    assert_resolves(ctx,          "./n-named-jsz.jsz", Fail, &cjs);
 
-    assert_resolves(ctx,          "./n-named-js", None, &cjs);
-    assert_resolves(ctx,          "./n-named-json", None, &cjs);
-    assert_resolves(ctx,          "./n-named-mjs", None, &esm);
+    assert_resolves(ctx,          "./n-named-js", Fail, &cjs);
+    assert_resolves(ctx,          "./n-named-json", Fail, &cjs);
+    assert_resolves(ctx,          "./n-named-mjs", Fail, &esm);
 
-    assert_resolves(ctx,          "./n-dir-js", None, &cjs);
-    assert_resolves(ctx,          "./n-dir-js/index", None, &cjs);
-    assert_resolves(ctx,          "./n-dir-json", None, &cjs);
-    assert_resolves(ctx,          "./n-dir-json/index", None, &cjs);
-    assert_resolves(ctx,          "./n-dir-mjs", None, &esm);
-    assert_resolves(ctx,          "./n-dir-mjs/index", None, &esm);
+    assert_resolves(ctx,          "./n-dir-js", Fail, &cjs);
+    assert_resolves(ctx,          "./n-dir-js/index", Fail, &cjs);
+    assert_resolves(ctx,          "./n-dir-json", Fail, &cjs);
+    assert_resolves(ctx,          "./n-dir-json/index", Fail, &cjs);
+    assert_resolves(ctx,          "./n-dir-mjs", Fail, &esm);
+    assert_resolves(ctx,          "./n-dir-mjs/index", Fail, &esm);
 
-    assert_resolves(ctx,          "./n-mod-noext-bare", None, &cjs);
-    assert_resolves(ctx,          "./n-mod-noext-rel", None, &cjs);
+    assert_resolves(ctx,          "./n-mod-noext-bare", Fail, &cjs);
+    assert_resolves(ctx,          "./n-mod-noext-rel", Fail, &cjs);
 
-    assert_resolves(ctx,          "./n-mod-main-nesting-bare", None, &cjs);
-    assert_resolves(ctx,          "./n-mod-main-nesting-bare/subdir", None, &cjs);
-    assert_resolves(ctx,          "./n-mod-main-nesting-rel", None, &cjs);
-    assert_resolves(ctx,          "./n-mod-main-nesting-rel/subdir", None, &cjs);
+    assert_resolves(ctx,          "./n-mod-main-nesting-bare", Fail, &cjs);
+    assert_resolves(ctx,          "./n-mod-main-nesting-bare/subdir", Fail, &cjs);
+    assert_resolves(ctx,          "./n-mod-main-nesting-rel", Fail, &cjs);
+    assert_resolves(ctx,          "./n-mod-main-nesting-rel/subdir", Fail, &cjs);
 
-    assert_resolves(ctx,          "./n-mod-js-ext-bare", None, &cjs);
-    assert_resolves(ctx,          "./n-mod-js-ext-rel", None, &cjs);
-    assert_resolves(ctx,          "./n-mod-js-noext-bare", None, &cjs);
-    assert_resolves(ctx,          "./n-mod-js-noext-rel", None, &cjs);
-    assert_resolves(ctx,          "./n-mod-js-dir-bare", None, &cjs);
-    assert_resolves(ctx,          "./n-mod-js-dir-rel", None, &cjs);
+    assert_resolves(ctx,          "./n-mod-js-ext-bare", Fail, &cjs);
+    assert_resolves(ctx,          "./n-mod-js-ext-rel", Fail, &cjs);
+    assert_resolves(ctx,          "./n-mod-js-noext-bare", Fail, &cjs);
+    assert_resolves(ctx,          "./n-mod-js-noext-rel", Fail, &cjs);
+    assert_resolves(ctx,          "./n-mod-js-dir-bare", Fail, &cjs);
+    assert_resolves(ctx,          "./n-mod-js-dir-rel", Fail, &cjs);
 
-    assert_resolves(ctx,          "./n-mod-json-ext-bare", None, &cjs);
-    assert_resolves(ctx,          "./n-mod-json-ext-rel", None, &cjs);
-    assert_resolves(ctx,          "./n-mod-json-noext-bare", None, &cjs);
-    assert_resolves(ctx,          "./n-mod-json-noext-rel", None, &cjs);
-    assert_resolves(ctx,          "./n-mod-json-dir-bare", None, &cjs);
-    assert_resolves(ctx,          "./n-mod-json-dir-rel", None, &cjs);
+    assert_resolves(ctx,          "./n-mod-json-ext-bare", Fail, &cjs);
+    assert_resolves(ctx,          "./n-mod-json-ext-rel", Fail, &cjs);
+    assert_resolves(ctx,          "./n-mod-json-noext-bare", Fail, &cjs);
+    assert_resolves(ctx,          "./n-mod-json-noext-rel", Fail, &cjs);
+    assert_resolves(ctx,          "./n-mod-json-dir-bare", Fail, &cjs);
+    assert_resolves(ctx,          "./n-mod-json-dir-rel", Fail, &cjs);
 
-    assert_resolves(ctx,          "./n-mod-mjs-ext-bare", None, &esm);
-    assert_resolves(ctx,          "./n-mod-mjs-ext-rel", None, &esm);
-    assert_resolves(ctx,          "./n-mod-mjs-noext-bare", None, &esm);
-    assert_resolves(ctx,          "./n-mod-mjs-noext-rel", None, &esm);
-    assert_resolves(ctx,          "./n-mod-mjs-dir-bare", None, &esm);
-    assert_resolves(ctx,          "./n-mod-mjs-dir-rel", None, &esm);
+    assert_resolves(ctx,          "./n-mod-mjs-ext-bare", Fail, &esm);
+    assert_resolves(ctx,          "./n-mod-mjs-ext-rel", Fail, &esm);
+    assert_resolves(ctx,          "./n-mod-mjs-noext-bare", Fail, &esm);
+    assert_resolves(ctx,          "./n-mod-mjs-noext-rel", Fail, &esm);
+    assert_resolves(ctx,          "./n-mod-mjs-dir-bare", Fail, &esm);
+    assert_resolves(ctx,          "./n-mod-mjs-dir-rel", Fail, &esm);
 
-    assert_resolves(ctx,          "./n-mod-js-slash-bare", None, &cjs);
-    assert_resolves(ctx,          "./n-mod-js-slash-rel", None, &cjs);
+    assert_resolves(ctx,          "./n-mod-js-slash-bare", Fail, &cjs);
+    assert_resolves(ctx,          "./n-mod-js-slash-rel", Fail, &cjs);
 
-    assert_resolves(ctx,          "./n-named-jsz", None, &cjs);
+    assert_resolves(ctx,          "./n-named-jsz", Fail, &cjs);
 
-    assert_resolves(ctx,          "./n-file-and-dir", None, &cjs);
-    assert_resolves(ctx,          "./n-file-and-dir/", None, &cjs);
-    assert_resolves(ctx,          "./n-file-and-mod", None, &cjs);
-    assert_resolves(ctx,          "./n-file-and-mod/", None, &cjs);
-    assert_resolves(ctx,          "./n-dir-js/", None, &cjs);
-    assert_resolves(ctx,          "./n-mod-js-noext-rel/", None, &cjs);
-    assert_resolves(ctx,          "./n-named-js.js/", None, &cjs);
-    assert_resolves(ctx,          "./n-named-js/", None, &cjs);
-    assert_resolves(ctx,          "./n-named-noext/", None, &cjs);
+    assert_resolves(ctx,          "./n-file-and-dir", Fail, &cjs);
+    assert_resolves(ctx,          "./n-file-and-dir/", Fail, &cjs);
+    assert_resolves(ctx,          "./n-file-and-mod", Fail, &cjs);
+    assert_resolves(ctx,          "./n-file-and-mod/", Fail, &cjs);
+    assert_resolves(ctx,          "./n-dir-js/", Fail, &cjs);
+    assert_resolves(ctx,          "./n-mod-js-noext-rel/", Fail, &cjs);
+    assert_resolves(ctx,          "./n-named-js.js/", Fail, &cjs);
+    assert_resolves(ctx,          "./n-named-js/", Fail, &cjs);
+    assert_resolves(ctx,          "./n-named-noext/", Fail, &cjs);
 
     assert_resolves(ctx,          "shadowed",
-        Some("resolve/node_modules/shadowed/index.js"), &cjs);
+           Y("resolve/node_modules/shadowed/index.js"), &cjs);
 
     assert_resolves(ctx,          "@user/scoped",
-        Some("resolve/node_modules/@user/scoped/index.js"), &cjs);
+           Y("resolve/node_modules/@user/scoped/index.js"), &cjs);
     assert_resolves(ctx,          "@user/scoped/index",
-        Some("resolve/node_modules/@user/scoped/index.js"), &cjs);
+           Y("resolve/node_modules/@user/scoped/index.js"), &cjs);
     assert_resolves(ctx,          "@user/scoped/index.js",
-        Some("resolve/node_modules/@user/scoped/index.js"), &cjs);
+           Y("resolve/node_modules/@user/scoped/index.js"), &cjs);
 
     assert_resolves(ctx,          "shallow/s-named-noext",
-        Some("resolve/node_modules/shallow/s-named-noext"), &cjs);
+           Y("resolve/node_modules/shallow/s-named-noext"), &cjs);
     assert_resolves(ctx,          "shallow/s-named-js.js",
-        Some("resolve/node_modules/shallow/s-named-js.js"), &cjs);
+           Y("resolve/node_modules/shallow/s-named-js.js"), &cjs);
     assert_resolves(ctx,          "shallow/s-named-json.json",
-        Some("resolve/node_modules/shallow/s-named-json.json"), &cjs);
+           Y("resolve/node_modules/shallow/s-named-json.json"), &cjs);
     assert_resolves(ctx,          "shallow/s-named-mjs.mjs",
-        Some("resolve/node_modules/shallow/s-named-mjs.mjs"), &esm);
+           Y("resolve/node_modules/shallow/s-named-mjs.mjs"), &esm);
     assert_resolves(ctx,          "shallow/s-named-jsz.jsz",
-        Some("resolve/node_modules/shallow/s-named-jsz.jsz"), &cjs);
+           Y("resolve/node_modules/shallow/s-named-jsz.jsz"), &cjs);
 
     assert_resolves(ctx,          "shallow/s-named-js",
-        Some("resolve/node_modules/shallow/s-named-js.js"), &cjs);
+           Y("resolve/node_modules/shallow/s-named-js.js"), &cjs);
     assert_resolves(ctx,          "shallow/s-named-json",
-        Some("resolve/node_modules/shallow/s-named-json.json"), &cjs);
+           Y("resolve/node_modules/shallow/s-named-json.json"), &cjs);
     assert_resolves(ctx,          "shallow/s-named-mjs",
-        Some("resolve/node_modules/shallow/s-named-mjs.mjs"), &esm);
+           Y("resolve/node_modules/shallow/s-named-mjs.mjs"), &esm);
 
     assert_resolves(ctx,          "shallow/s-dir-js",
-        Some("resolve/node_modules/shallow/s-dir-js/index.js"), &cjs);
+           Y("resolve/node_modules/shallow/s-dir-js/index.js"), &cjs);
     assert_resolves(ctx,          "shallow/s-dir-js/index",
-        Some("resolve/node_modules/shallow/s-dir-js/index.js"), &cjs);
+           Y("resolve/node_modules/shallow/s-dir-js/index.js"), &cjs);
     assert_resolves(ctx,          "shallow/s-dir-json",
-        Some("resolve/node_modules/shallow/s-dir-json/index.json"), &cjs);
+           Y("resolve/node_modules/shallow/s-dir-json/index.json"), &cjs);
     assert_resolves(ctx,          "shallow/s-dir-json/index",
-        Some("resolve/node_modules/shallow/s-dir-json/index.json"), &cjs);
+           Y("resolve/node_modules/shallow/s-dir-json/index.json"), &cjs);
     assert_resolves(ctx,          "shallow/s-dir-mjs",
-        Some("resolve/node_modules/shallow/s-dir-mjs/index.mjs"), &esm);
+           Y("resolve/node_modules/shallow/s-dir-mjs/index.mjs"), &esm);
     assert_resolves(ctx,          "shallow/s-dir-mjs/index",
-        Some("resolve/node_modules/shallow/s-dir-mjs/index.mjs"), &esm);
+           Y("resolve/node_modules/shallow/s-dir-mjs/index.mjs"), &esm);
 
     assert_resolves(ctx,          "shallow/s-mod-noext-bare",
-        Some("resolve/node_modules/shallow/s-mod-noext-bare/main-noext"), &cjs);
+           Y("resolve/node_modules/shallow/s-mod-noext-bare/main-noext"), &cjs);
     assert_resolves(ctx,          "shallow/s-mod-noext-rel",
-        Some("resolve/node_modules/shallow/s-mod-noext-rel/main-noext"), &cjs);
+           Y("resolve/node_modules/shallow/s-mod-noext-rel/main-noext"), &cjs);
 
     assert_resolves(ctx,          "shallow/s-mod-main-nesting-bare",
-        Some("resolve/node_modules/shallow/s-mod-main-nesting-bare/subdir/index.js"), &cjs);
+           Y("resolve/node_modules/shallow/s-mod-main-nesting-bare/subdir/index.js"), &cjs);
     assert_resolves(ctx,          "shallow/s-mod-main-nesting-bare/subdir",
-        Some("resolve/node_modules/shallow/s-mod-main-nesting-bare/subdir/inner-main.js"), &cjs);
+           Y("resolve/node_modules/shallow/s-mod-main-nesting-bare/subdir/inner-main.js"), &cjs);
     assert_resolves(ctx,          "shallow/s-mod-main-nesting-rel",
-        Some("resolve/node_modules/shallow/s-mod-main-nesting-rel/subdir/index.js"), &cjs);
+           Y("resolve/node_modules/shallow/s-mod-main-nesting-rel/subdir/index.js"), &cjs);
     assert_resolves(ctx,          "shallow/s-mod-main-nesting-rel/subdir",
-        Some("resolve/node_modules/shallow/s-mod-main-nesting-rel/subdir/inner-main.js"), &cjs);
+           Y("resolve/node_modules/shallow/s-mod-main-nesting-rel/subdir/inner-main.js"), &cjs);
 
     assert_resolves(ctx,          "shallow/s-mod-js-ext-bare",
-        Some("resolve/node_modules/shallow/s-mod-js-ext-bare/main-js.js"), &cjs);
+           Y("resolve/node_modules/shallow/s-mod-js-ext-bare/main-js.js"), &cjs);
     assert_resolves(ctx,          "shallow/s-mod-js-ext-rel",
-        Some("resolve/node_modules/shallow/s-mod-js-ext-rel/main-js.js"), &cjs);
+           Y("resolve/node_modules/shallow/s-mod-js-ext-rel/main-js.js"), &cjs);
     assert_resolves(ctx,          "shallow/s-mod-js-noext-bare",
-        Some("resolve/node_modules/shallow/s-mod-js-noext-bare/main-js.js"), &cjs);
+           Y("resolve/node_modules/shallow/s-mod-js-noext-bare/main-js.js"), &cjs);
     assert_resolves(ctx,          "shallow/s-mod-js-noext-rel",
-        Some("resolve/node_modules/shallow/s-mod-js-noext-rel/main-js.js"), &cjs);
+           Y("resolve/node_modules/shallow/s-mod-js-noext-rel/main-js.js"), &cjs);
     assert_resolves(ctx,          "shallow/s-mod-js-dir-bare",
-        Some("resolve/node_modules/shallow/s-mod-js-dir-bare/main-js/index.js"), &cjs);
+           Y("resolve/node_modules/shallow/s-mod-js-dir-bare/main-js/index.js"), &cjs);
     assert_resolves(ctx,          "shallow/s-mod-js-dir-rel",
-        Some("resolve/node_modules/shallow/s-mod-js-dir-rel/main-js/index.js"), &cjs);
+           Y("resolve/node_modules/shallow/s-mod-js-dir-rel/main-js/index.js"), &cjs);
 
     assert_resolves(ctx,          "shallow/s-mod-json-ext-bare",
-        Some("resolve/node_modules/shallow/s-mod-json-ext-bare/main-json.json"), &cjs);
+           Y("resolve/node_modules/shallow/s-mod-json-ext-bare/main-json.json"), &cjs);
     assert_resolves(ctx,          "shallow/s-mod-json-ext-rel",
-        Some("resolve/node_modules/shallow/s-mod-json-ext-rel/main-json.json"), &cjs);
+           Y("resolve/node_modules/shallow/s-mod-json-ext-rel/main-json.json"), &cjs);
     assert_resolves(ctx,          "shallow/s-mod-json-noext-bare",
-        Some("resolve/node_modules/shallow/s-mod-json-noext-bare/main-json.json"), &cjs);
+           Y("resolve/node_modules/shallow/s-mod-json-noext-bare/main-json.json"), &cjs);
     assert_resolves(ctx,          "shallow/s-mod-json-noext-rel",
-        Some("resolve/node_modules/shallow/s-mod-json-noext-rel/main-json.json"), &cjs);
+           Y("resolve/node_modules/shallow/s-mod-json-noext-rel/main-json.json"), &cjs);
     assert_resolves(ctx,          "shallow/s-mod-json-dir-bare",
-        Some("resolve/node_modules/shallow/s-mod-json-dir-bare/main-json/index.json"), &cjs);
+           Y("resolve/node_modules/shallow/s-mod-json-dir-bare/main-json/index.json"), &cjs);
     assert_resolves(ctx,          "shallow/s-mod-json-dir-rel",
-        Some("resolve/node_modules/shallow/s-mod-json-dir-rel/main-json/index.json"), &cjs);
+           Y("resolve/node_modules/shallow/s-mod-json-dir-rel/main-json/index.json"), &cjs);
 
     assert_resolves(ctx,          "shallow/s-mod-mjs-ext-bare",
-        Some("resolve/node_modules/shallow/s-mod-mjs-ext-bare/main-mjs.mjs"), &esm);
+           Y("resolve/node_modules/shallow/s-mod-mjs-ext-bare/main-mjs.mjs"), &esm);
     assert_resolves(ctx,          "shallow/s-mod-mjs-ext-rel",
-        Some("resolve/node_modules/shallow/s-mod-mjs-ext-rel/main-mjs.mjs"), &esm);
+           Y("resolve/node_modules/shallow/s-mod-mjs-ext-rel/main-mjs.mjs"), &esm);
     assert_resolves(ctx,          "shallow/s-mod-mjs-noext-bare",
-        Some("resolve/node_modules/shallow/s-mod-mjs-noext-bare/main-mjs.mjs"), &esm);
+           Y("resolve/node_modules/shallow/s-mod-mjs-noext-bare/main-mjs.mjs"), &esm);
     assert_resolves(ctx,          "shallow/s-mod-mjs-noext-rel",
-        Some("resolve/node_modules/shallow/s-mod-mjs-noext-rel/main-mjs.mjs"), &esm);
+           Y("resolve/node_modules/shallow/s-mod-mjs-noext-rel/main-mjs.mjs"), &esm);
     assert_resolves(ctx,          "shallow/s-mod-mjs-dir-bare",
-        Some("resolve/node_modules/shallow/s-mod-mjs-dir-bare/main-mjs/index.mjs"), &esm);
+           Y("resolve/node_modules/shallow/s-mod-mjs-dir-bare/main-mjs/index.mjs"), &esm);
     assert_resolves(ctx,          "shallow/s-mod-mjs-dir-rel",
-        Some("resolve/node_modules/shallow/s-mod-mjs-dir-rel/main-mjs/index.mjs"), &esm);
+           Y("resolve/node_modules/shallow/s-mod-mjs-dir-rel/main-mjs/index.mjs"), &esm);
 
     assert_resolves(ctx,          "shallow/s-mod-js-slash-bare",
-        Some("resolve/node_modules/shallow/s-mod-js-slash-bare/main.js"), &cjs);
+           Y("resolve/node_modules/shallow/s-mod-js-slash-bare/main.js"), &cjs);
     assert_resolves(ctx,          "shallow/s-mod-js-slash-rel",
-        Some("resolve/node_modules/shallow/s-mod-js-slash-rel/main.js"), &cjs);
+           Y("resolve/node_modules/shallow/s-mod-js-slash-rel/main.js"), &cjs);
 
-    assert_resolves(ctx,          "shallow/s-named-jsz", None, &cjs);
+    assert_resolves(ctx,          "shallow/s-named-jsz", Fail, &cjs);
 
     assert_resolves(ctx,          "shallow/s-file-and-dir",
-        Some("resolve/node_modules/shallow/s-file-and-dir.js"), &cjs);
+           Y("resolve/node_modules/shallow/s-file-and-dir.js"), &cjs);
     assert_resolves(ctx,          "shallow/s-file-and-dir/",
-        Some("resolve/node_modules/shallow/s-file-and-dir/index.js"), &cjs);
+           Y("resolve/node_modules/shallow/s-file-and-dir/index.js"), &cjs);
     assert_resolves(ctx,          "shallow/s-file-and-mod",
-        Some("resolve/node_modules/shallow/s-file-and-mod.js"), &cjs);
+           Y("resolve/node_modules/shallow/s-file-and-mod.js"), &cjs);
     assert_resolves(ctx,          "shallow/s-file-and-mod/",
-        Some("resolve/node_modules/shallow/s-file-and-mod/main.js"), &cjs);
+           Y("resolve/node_modules/shallow/s-file-and-mod/main.js"), &cjs);
     assert_resolves(ctx,          "shallow/s-dir-js/",
-        Some("resolve/node_modules/shallow/s-dir-js/index.js"), &cjs);
+           Y("resolve/node_modules/shallow/s-dir-js/index.js"), &cjs);
     assert_resolves(ctx,          "shallow/s-mod-js-noext-rel/",
-        Some("resolve/node_modules/shallow/s-mod-js-noext-rel/main-js.js"), &cjs);
-    assert_resolves(ctx,          "shallow/s-named-js.js/", None, &cjs);
-    assert_resolves(ctx,          "shallow/s-named-js/", None, &cjs);
-    assert_resolves(ctx,          "shallow/s-named-noext/", None, &cjs);
+           Y("resolve/node_modules/shallow/s-mod-js-noext-rel/main-js.js"), &cjs);
+    assert_resolves(ctx,          "shallow/s-named-js.js/", Fail, &cjs);
+    assert_resolves(ctx,          "shallow/s-named-js/", Fail, &cjs);
+    assert_resolves(ctx,          "shallow/s-named-noext/", Fail, &cjs);
 
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-named-noext",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-named-noext"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-named-noext"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-named-js.js",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-named-js.js"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-named-js.js"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-named-json.json",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-named-json.json"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-named-json.json"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-named-mjs.mjs",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-named-mjs.mjs"), &esm);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-named-mjs.mjs"), &esm);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-named-jsz.jsz",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-named-jsz.jsz"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-named-jsz.jsz"), &cjs);
 
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-named-js",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-named-js.js"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-named-js.js"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-named-json",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-named-json.json"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-named-json.json"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-named-mjs",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-named-mjs.mjs"), &esm);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-named-mjs.mjs"), &esm);
 
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-dir-js",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-dir-js/index.js"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-dir-js/index.js"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-dir-js/index",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-dir-js/index.js"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-dir-js/index.js"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-dir-json",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-dir-json/index.json"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-dir-json/index.json"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-dir-json/index",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-dir-json/index.json"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-dir-json/index.json"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-dir-mjs",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-dir-mjs/index.mjs"), &esm);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-dir-mjs/index.mjs"), &esm);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-dir-mjs/index",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-dir-mjs/index.mjs"), &esm);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-dir-mjs/index.mjs"), &esm);
 
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-noext-bare",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-noext-bare/main-noext"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-noext-bare/main-noext"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-noext-rel",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-noext-rel/main-noext"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-noext-rel/main-noext"), &cjs);
 
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-main-nesting-bare",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-main-nesting-bare/subdir/index.js"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-main-nesting-bare/subdir/index.js"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-main-nesting-bare/subdir",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-main-nesting-bare/subdir/inner-main.js"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-main-nesting-bare/subdir/inner-main.js"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-main-nesting-rel",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-main-nesting-rel/subdir/index.js"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-main-nesting-rel/subdir/index.js"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-main-nesting-rel/subdir",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-main-nesting-rel/subdir/inner-main.js"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-main-nesting-rel/subdir/inner-main.js"), &cjs);
 
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-js-ext-bare",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-js-ext-bare/main-js.js"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-js-ext-bare/main-js.js"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-js-ext-rel",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-js-ext-rel/main-js.js"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-js-ext-rel/main-js.js"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-js-noext-bare",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-js-noext-bare/main-js.js"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-js-noext-bare/main-js.js"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-js-noext-rel",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-js-noext-rel/main-js.js"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-js-noext-rel/main-js.js"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-js-dir-bare",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-js-dir-bare/main-js/index.js"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-js-dir-bare/main-js/index.js"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-js-dir-rel",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-js-dir-rel/main-js/index.js"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-js-dir-rel/main-js/index.js"), &cjs);
 
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-json-ext-bare",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-json-ext-bare/main-json.json"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-json-ext-bare/main-json.json"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-json-ext-rel",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-json-ext-rel/main-json.json"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-json-ext-rel/main-json.json"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-json-noext-bare",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-json-noext-bare/main-json.json"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-json-noext-bare/main-json.json"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-json-noext-rel",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-json-noext-rel/main-json.json"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-json-noext-rel/main-json.json"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-json-dir-bare",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-json-dir-bare/main-json/index.json"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-json-dir-bare/main-json/index.json"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-json-dir-rel",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-json-dir-rel/main-json/index.json"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-json-dir-rel/main-json/index.json"), &cjs);
 
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-mjs-ext-bare",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-mjs-ext-bare/main-mjs.mjs"), &esm);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-mjs-ext-bare/main-mjs.mjs"), &esm);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-mjs-ext-rel",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-mjs-ext-rel/main-mjs.mjs"), &esm);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-mjs-ext-rel/main-mjs.mjs"), &esm);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-mjs-noext-bare",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-mjs-noext-bare/main-mjs.mjs"), &esm);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-mjs-noext-bare/main-mjs.mjs"), &esm);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-mjs-noext-rel",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-mjs-noext-rel/main-mjs.mjs"), &esm);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-mjs-noext-rel/main-mjs.mjs"), &esm);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-mjs-dir-bare",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-mjs-dir-bare/main-mjs/index.mjs"), &esm);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-mjs-dir-bare/main-mjs/index.mjs"), &esm);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-mjs-dir-rel",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-mjs-dir-rel/main-mjs/index.mjs"), &esm);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-mjs-dir-rel/main-mjs/index.mjs"), &esm);
 
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-js-slash-bare",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-js-slash-bare/main.js"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-js-slash-bare/main.js"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-js-slash-rel",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-js-slash-rel/main.js"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-js-slash-rel/main.js"), &cjs);
 
-    assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-named-jsz", None, &cjs);
+    assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-named-jsz", Fail, &cjs);
 
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-file-and-dir",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-file-and-dir.js"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-file-and-dir.js"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-file-and-dir/",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-file-and-dir/index.js"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-file-and-dir/index.js"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-file-and-mod",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-file-and-mod.js"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-file-and-mod.js"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-file-and-mod/",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-file-and-mod/main.js"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-file-and-mod/main.js"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-dir-js/",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-dir-js/index.js"), &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-dir-js/index.js"), &cjs);
     assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-mod-js-noext-rel/",
-        Some("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-js-noext-rel/main-js.js"), &cjs);
-    assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-named-js.js/", None, &cjs);
-    assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-named-js/", None, &cjs);
-    assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-named-noext/", None, &cjs);
+           Y("resolve/node_modules/deep/dir1/dir2/dir3/d-mod-js-noext-rel/main-js.js"), &cjs);
+    assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-named-js.js/", Fail, &cjs);
+    assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-named-js/", Fail, &cjs);
+    assert_resolves(ctx,          "deep/dir1/dir2/dir3/d-named-noext/", Fail, &cjs);
 
     let ctx = "resolve/subdir/hypothetical.js";
     assert_resolves(ctx,                 "shadowed",
-         Some("resolve/subdir/node_modules/shadowed/index.js"), &cjs);
+            Y("resolve/subdir/node_modules/shadowed/index.js"), &cjs);
 
     let ctx = "resolve/subdir/subdir2/hypothetical.js";
     assert_resolves(ctx,                          "shadowed",
-         Some("resolve/subdir/subdir2/node_modules/shadowed/index.js"), &cjs);
+            Y("resolve/subdir/subdir2/node_modules/shadowed/index.js"), &cjs);
 
     let ctx = "resolve/hypothetical.js";
-    assert_resolves(ctx,  "./dotfiles", None, &cjs);
-    assert_resolves(ctx,  "./dotfiles/", None, &esm);
+    assert_resolves(ctx,  "./dotfiles", Fail, &cjs);
+    assert_resolves(ctx,  "./dotfiles/", Fail, &esm);
 
     assert_resolves(ctx,  "./dotfiles/.thing",
-               Some("resolve/dotfiles/.thing"), &cjs);
+                  Y("resolve/dotfiles/.thing"), &cjs);
     assert_resolves(ctx,  "./dotfiles/.thing-js",
-               Some("resolve/dotfiles/.thing-js.js"), &cjs);
+                  Y("resolve/dotfiles/.thing-js.js"), &cjs);
     assert_resolves(ctx,  "./dotfiles/.thing-js.js",
-               Some("resolve/dotfiles/.thing-js.js"), &cjs);
+                  Y("resolve/dotfiles/.thing-js.js"), &cjs);
     assert_resolves(ctx,  "./dotfiles/.thing-json",
-               Some("resolve/dotfiles/.thing-json.json"), &cjs);
+                  Y("resolve/dotfiles/.thing-json.json"), &cjs);
     assert_resolves(ctx,  "./dotfiles/.thing-json.json",
-               Some("resolve/dotfiles/.thing-json.json"), &cjs);
+                  Y("resolve/dotfiles/.thing-json.json"), &cjs);
     assert_resolves(ctx,  "./dotfiles/.thing-mjs",
-               Some("resolve/dotfiles/.thing-mjs.mjs"), &esm);
+                  Y("resolve/dotfiles/.thing-mjs.mjs"), &esm);
     assert_resolves(ctx,  "./dotfiles/.thing-mjs.mjs",
-               Some("resolve/dotfiles/.thing-mjs.mjs"), &esm);
+                  Y("resolve/dotfiles/.thing-mjs.mjs"), &esm);
 
     assert_resolves(ctx,  "./dotfiles/.js",
-               Some("resolve/dotfiles/.js"), &cjs);
+                  Y("resolve/dotfiles/.js"), &cjs);
     assert_resolves(ctx,  "./dotfiles/.json",
-               Some("resolve/dotfiles/.json"), &cjs);
+                  Y("resolve/dotfiles/.json"), &cjs);
     assert_resolves(ctx,  "./dotfiles/.mjs",
-               Some("resolve/dotfiles/.mjs"), &esm);
+                  Y("resolve/dotfiles/.mjs"), &esm);
 
     assert_resolves(ctx,  "./dotfiles/mod-noext",
-               Some("resolve/dotfiles/mod-noext/.thing"), &cjs);
+                  Y("resolve/dotfiles/mod-noext/.thing"), &cjs);
     assert_resolves(ctx,  "./dotfiles/mod-js",
-               Some("resolve/dotfiles/mod-js/.thing-js.js"), &cjs);
+                  Y("resolve/dotfiles/mod-js/.thing-js.js"), &cjs);
     assert_resolves(ctx,  "./dotfiles/mod-json",
-               Some("resolve/dotfiles/mod-json/.thing-json.json"), &cjs);
+                  Y("resolve/dotfiles/mod-json/.thing-json.json"), &cjs);
     assert_resolves(ctx,  "./dotfiles/mod-mjs",
-               Some("resolve/dotfiles/mod-mjs/.thing-mjs.mjs"), &esm);
+                  Y("resolve/dotfiles/mod-mjs/.thing-mjs.mjs"), &esm);
 
     let ctx = "resolve-order/hypothetical.js";
     assert_resolves(ctx,  "./1-file",
-         Some("resolve-order/1-file"), &cjs);
+            Y("resolve-order/1-file"), &cjs);
     assert_resolves(ctx,  "./2-file",
-         Some("resolve-order/2-file.js"), &cjs);
+            Y("resolve-order/2-file.js"), &cjs);
     assert_resolves(ctx,  "./3-file",
-         Some("resolve-order/3-file.json"), &cjs);
+            Y("resolve-order/3-file.json"), &cjs);
     assert_resolves(ctx,  "./1-dir",
-         Some("resolve-order/1-dir.js"), &cjs);
+            Y("resolve-order/1-dir.js"), &cjs);
     assert_resolves(ctx,  "./2-dir",
-         Some("resolve-order/2-dir.json"), &cjs);
+            Y("resolve-order/2-dir.json"), &cjs);
     assert_resolves(ctx,  "./3-dir",
-         Some("resolve-order/3-dir/index.js"), &cjs);
+            Y("resolve-order/3-dir/index.js"), &cjs);
     assert_resolves(ctx,  "./4-dir",
-         Some("resolve-order/4-dir/index.json"), &cjs);
+            Y("resolve-order/4-dir/index.json"), &cjs);
     assert_resolves(ctx,  "./1-dir/",
-         Some("resolve-order/1-dir/index.js"), &cjs);
+            Y("resolve-order/1-dir/index.js"), &cjs);
     assert_resolves(ctx,  "./2-dir/",
-         Some("resolve-order/2-dir/index.js"), &cjs);
+            Y("resolve-order/2-dir/index.js"), &cjs);
     assert_resolves(ctx,  "./3-dir/",
-         Some("resolve-order/3-dir/index.js"), &cjs);
+            Y("resolve-order/3-dir/index.js"), &cjs);
     assert_resolves(ctx,  "./4-dir/",
-         Some("resolve-order/4-dir/index.json"), &cjs);
+            Y("resolve-order/4-dir/index.json"), &cjs);
 }
 
 fn test_resolve_unicode_with<F>(mut assert_resolves: F)
-where F: FnMut(&str, &str, Option<&str>, &InputOptions) {
+where F: FnMut(&str, &str, Resolution<'static>, &InputOptions) {
     let cjs = InputOptions {
         for_browser: false,
         es6_syntax: false,
@@ -1209,9 +1222,9 @@ where F: FnMut(&str, &str, Option<&str>, &InputOptions) {
 
     let ctx = "resolve/hypothetical.js";
     assert_resolves(ctx,  "./unicode/𝌆",
-         Some("resolve/unicode/𝌆.js"), &cjs);
+                  Y("resolve/unicode/𝌆.js"), &cjs);
     assert_resolves(ctx,  "./unicode/𝌆.js",
-         Some("resolve/unicode/𝌆.js"), &cjs);
+                  Y("resolve/unicode/𝌆.js"), &cjs);
 }
 
 #[test]
@@ -1234,7 +1247,7 @@ fn test_resolve_consistency() {
         }
     }
 
-    type Cases = Vec<(String, Option<String>)>;
+    type Cases = Vec<(String, Resolution<'static>)>;
     type CaseMap = FnvHashMap<String, Cases>;
 
     let mut cjs = FnvHashMap::default();
@@ -1242,7 +1255,7 @@ fn test_resolve_consistency() {
     let mut esm = FnvHashMap::default();
 
     {
-        let mut append = |ctx: &str, from: &str, to: Option<&str>, input_options: &InputOptions| {
+        let mut append = |ctx: &str, from: &str, to: Resolution<'static>, input_options: &InputOptions| {
             let assertions = if input_options.for_browser {
                 &mut browser
             } else if input_options.es6_syntax {
@@ -1252,7 +1265,7 @@ fn test_resolve_consistency() {
             };
             assertions.entry(ctx.to_owned())
                 .or_insert_with(Vec::default)
-                .push((from.to_owned(), to.map(ToOwned::to_owned)));
+                .push((from.to_owned(), to));
         };
 
         // test_resolve_with(&mut append);
@@ -1314,23 +1327,26 @@ fn test_resolve_consistency() {
             } else {
                 serde_json::to_string(&from)
             }.unwrap();
-            if let Some(to) = to {
-                let mut to_path = base.to_owned();
-                to_path.append_resolving(to);
-                let to = serde_json::to_string(to_path.canonicalize().unwrap().to_str().unwrap()).unwrap();
-                match target {
-                    Target::Browserify => {
-                        writeln!(b, "y(require({from}), {from}, {to})", from=from, to=to).unwrap();
-                    }
-                    Target::Webpack => {
-                        writeln!(b, "y(require.resolve({from}), {from}, {to})", from=from, to=to).unwrap();
-                    }
-                    Target::Node => {
-                        writeln!(b, "y({from}, {to})", from=from, to=to).unwrap();
+            match to {
+                Y(to) => {
+                    let mut to_path = base.to_owned();
+                    to_path.append_resolving(to);
+                    let to = serde_json::to_string(to_path.canonicalize().unwrap().to_str().unwrap()).unwrap();
+                    match target {
+                        Target::Browserify => {
+                            writeln!(b, "y(require({from}), {from}, {to})", from=from, to=to).unwrap();
+                        }
+                        Target::Webpack => {
+                            writeln!(b, "y(require.resolve({from}), {from}, {to})", from=from, to=to).unwrap();
+                        }
+                        Target::Node => {
+                            writeln!(b, "y({from}, {to})", from=from, to=to).unwrap();
+                        }
                     }
                 }
-            } else {
-                match target {
+                Ignore => unimplemented!(),
+                External => unimplemented!(),
+                Fail => match target {
                     Target::Browserify => {
                         writeln!(b, "n(require({from}), {from})", from=from).unwrap();
                     }
@@ -1340,7 +1356,7 @@ fn test_resolve_consistency() {
                     Target::Node => {
                         writeln!(b, "n({from})", from=from).unwrap();
                     }
-                }
+                },
             }
         }
         writeln!(b, r#"process.nextTick(() => {{if (!success) throw new Error('failed: {} consistency')}})"#, target).unwrap();
@@ -1480,7 +1496,7 @@ fn test_browser() {
     test_browser_with(assert_resolves);
 }
 fn test_browser_with<F>(mut assert_resolves: F)
-where F: FnMut(&str, &str, Option<&str>, &InputOptions) {
+where F: FnMut(&str, &str, Resolution<'static>, &InputOptions) {
     let no = InputOptions {
         for_browser: false,
         es6_syntax: true,
@@ -1496,284 +1512,265 @@ where F: FnMut(&str, &str, Option<&str>, &InputOptions) {
 
     let ctx = "browser/hypothetical.js";
     assert_resolves(ctx,  "./alternate-main-rel",
-               Some("browser/alternate-main-rel/main-default.js"), &no);
+                  Y("browser/alternate-main-rel/main-default.js"), &no);
     assert_resolves(ctx,  "./alternate-main-rel/main-default",
-               Some("browser/alternate-main-rel/main-default.js"), &no);
+                  Y("browser/alternate-main-rel/main-default.js"), &no);
     assert_resolves(ctx,  "./alternate-main-rel/main-default.js",
-               Some("browser/alternate-main-rel/main-default.js"), &no);
+                  Y("browser/alternate-main-rel/main-default.js"), &no);
     assert_resolves(ctx,  "./alternate-main-bare",
-               Some("browser/alternate-main-bare/main-default.js"), &no);
+                  Y("browser/alternate-main-bare/main-default.js"), &no);
     assert_resolves(ctx,  "./alternate-main-bare/main-default",
-               Some("browser/alternate-main-bare/main-default.js"), &no);
+                  Y("browser/alternate-main-bare/main-default.js"), &no);
     assert_resolves(ctx,  "./alternate-main-bare/main-default.js",
-               Some("browser/alternate-main-bare/main-default.js"), &no);
+                  Y("browser/alternate-main-bare/main-default.js"), &no);
     assert_resolves(ctx,  "./alternate-main-rel",
-               Some("browser/alternate-main-rel/main-browser.js"), &br);
+                  Y("browser/alternate-main-rel/main-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-main-rel/main-default",
-               Some("browser/alternate-main-rel/main-default.js"), &br);
+                  Y("browser/alternate-main-rel/main-default.js"), &br);
     assert_resolves(ctx,  "./alternate-main-rel/main-default.js",
-               Some("browser/alternate-main-rel/main-default.js"), &br);
+                  Y("browser/alternate-main-rel/main-default.js"), &br);
     assert_resolves(ctx,  "./alternate-main-bare",
-               Some("browser/alternate-main-bare/main-browser.js"), &br);
+                  Y("browser/alternate-main-bare/main-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-main-bare/main-default",
-               Some("browser/alternate-main-bare/main-default.js"), &br);
+                  Y("browser/alternate-main-bare/main-default.js"), &br);
     assert_resolves(ctx,  "./alternate-main-bare/main-default.js",
-               Some("browser/alternate-main-bare/main-default.js"), &br);
+                  Y("browser/alternate-main-bare/main-default.js"), &br);
     let ctx = "browser/alternate-main-rel/hypothetical.js";
     assert_resolves(ctx,                     ".",
-               Some("browser/alternate-main-rel/main-default.js"), &no);
+                  Y("browser/alternate-main-rel/main-default.js"), &no);
     assert_resolves(ctx,                     "./main-default",
-               Some("browser/alternate-main-rel/main-default.js"), &no);
+                  Y("browser/alternate-main-rel/main-default.js"), &no);
     assert_resolves(ctx,                     "./main-default.js",
-               Some("browser/alternate-main-rel/main-default.js"), &no);
+                  Y("browser/alternate-main-rel/main-default.js"), &no);
     assert_resolves(ctx,                     ".",
-               Some("browser/alternate-main-rel/main-browser.js"), &br);
+                  Y("browser/alternate-main-rel/main-browser.js"), &br);
     assert_resolves(ctx,                     "./main-default.js",
-               Some("browser/alternate-main-rel/main-default.js"), &br);
+                  Y("browser/alternate-main-rel/main-default.js"), &br);
     let ctx = "browser/alternate-main-bare/hypothetical.js";
     assert_resolves(ctx,                     ".",
-               Some("browser/alternate-main-bare/main-default.js"), &no);
+                  Y("browser/alternate-main-bare/main-default.js"), &no);
     assert_resolves(ctx,                     "./main-default.js",
-               Some("browser/alternate-main-bare/main-default.js"), &no);
+                  Y("browser/alternate-main-bare/main-default.js"), &no);
     assert_resolves(ctx,                     "./main-default",
-               Some("browser/alternate-main-bare/main-default.js"), &no);
+                  Y("browser/alternate-main-bare/main-default.js"), &no);
     assert_resolves(ctx,                     ".",
-               Some("browser/alternate-main-bare/main-browser.js"), &br);
+                  Y("browser/alternate-main-bare/main-browser.js"), &br);
     assert_resolves(ctx,                     "./main-default",
-               Some("browser/alternate-main-bare/main-default.js"), &br);
+                  Y("browser/alternate-main-bare/main-default.js"), &br);
     assert_resolves(ctx,                     "./main-default.js",
-               Some("browser/alternate-main-bare/main-default.js"), &br);
+                  Y("browser/alternate-main-bare/main-default.js"), &br);
 
     let ctx = "browser/hypothetical.js";
     assert_resolves(ctx,  "./alternate-files-main-rel",
-               Some("browser/alternate-files-main-rel/main-default.js"), &no);
+                  Y("browser/alternate-files-main-rel/main-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files-main-rel/main-default",
-               Some("browser/alternate-files-main-rel/main-default.js"), &no);
+                  Y("browser/alternate-files-main-rel/main-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files-main-rel/main-default.js",
-               Some("browser/alternate-files-main-rel/main-default.js"), &no);
+                  Y("browser/alternate-files-main-rel/main-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files-main-bare",
-               Some("browser/alternate-files-main-bare/main-default.js"), &no);
+                  Y("browser/alternate-files-main-bare/main-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files-main-bare/main-default",
-               Some("browser/alternate-files-main-bare/main-default.js"), &no);
+                  Y("browser/alternate-files-main-bare/main-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files-main-bare/main-default.js",
-               Some("browser/alternate-files-main-bare/main-default.js"), &no);
+                  Y("browser/alternate-files-main-bare/main-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files-main-rel",
-               Some("browser/alternate-files-main-rel/main-browser.js"), &br);
+                  Y("browser/alternate-files-main-rel/main-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-files-main-rel/main-default",
-               Some("browser/alternate-files-main-rel/main-browser.js"), &br);
+                  Y("browser/alternate-files-main-rel/main-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-files-main-rel/main-default.js",
-               Some("browser/alternate-files-main-rel/main-browser.js"), &br);
+                  Y("browser/alternate-files-main-rel/main-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-files-main-bare",
-               Some("browser/alternate-files-main-bare/node_modules/main-browser.js"), &br);
+                  Y("browser/alternate-files-main-bare/node_modules/main-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-files-main-bare/main-default",
-               Some("browser/alternate-files-main-bare/node_modules/main-browser.js"), &br);
+                  Y("browser/alternate-files-main-bare/node_modules/main-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-files-main-bare/main-default.js",
-               Some("browser/alternate-files-main-bare/node_modules/main-browser.js"), &br);
+                  Y("browser/alternate-files-main-bare/node_modules/main-browser.js"), &br);
     let ctx = "browser/alternate-files-main-rel/hypothetical.js";
     assert_resolves(ctx,                           ".",
-               Some("browser/alternate-files-main-rel/main-default.js"), &no);
+                  Y("browser/alternate-files-main-rel/main-default.js"), &no);
     assert_resolves(ctx,                           "./main-default",
-               Some("browser/alternate-files-main-rel/main-default.js"), &no);
+                  Y("browser/alternate-files-main-rel/main-default.js"), &no);
     assert_resolves(ctx,                           "./main-default.js",
-               Some("browser/alternate-files-main-rel/main-default.js"), &no);
+                  Y("browser/alternate-files-main-rel/main-default.js"), &no);
     assert_resolves(ctx,                           ".",
-               Some("browser/alternate-files-main-rel/main-browser.js"), &br);
+                  Y("browser/alternate-files-main-rel/main-browser.js"), &br);
     assert_resolves(ctx,                           "./main-default",
-               Some("browser/alternate-files-main-rel/main-browser.js"), &br);
+                  Y("browser/alternate-files-main-rel/main-browser.js"), &br);
     assert_resolves(ctx,                           "./main-default.js",
-               Some("browser/alternate-files-main-rel/main-browser.js"), &br);
+                  Y("browser/alternate-files-main-rel/main-browser.js"), &br);
     let ctx = "browser/alternate-files-main-bare/hypothetical.js";
     assert_resolves(ctx,                            ".",
-               Some("browser/alternate-files-main-bare/main-default.js"), &no);
+                  Y("browser/alternate-files-main-bare/main-default.js"), &no);
     assert_resolves(ctx,                            "./main-default",
-               Some("browser/alternate-files-main-bare/main-default.js"), &no);
+                  Y("browser/alternate-files-main-bare/main-default.js"), &no);
     assert_resolves(ctx,                            "./main-default.js",
-               Some("browser/alternate-files-main-bare/main-default.js"), &no);
+                  Y("browser/alternate-files-main-bare/main-default.js"), &no);
     assert_resolves(ctx,                            ".",
-               Some("browser/alternate-files-main-bare/node_modules/main-browser.js"), &br);
+                  Y("browser/alternate-files-main-bare/node_modules/main-browser.js"), &br);
     assert_resolves(ctx,                            "./main-default",
-               Some("browser/alternate-files-main-bare/node_modules/main-browser.js"), &br);
+                  Y("browser/alternate-files-main-bare/node_modules/main-browser.js"), &br);
     assert_resolves(ctx,                            "./main-default.js",
-               Some("browser/alternate-files-main-bare/node_modules/main-browser.js"), &br);
+                  Y("browser/alternate-files-main-bare/node_modules/main-browser.js"), &br);
 
     let ctx = "browser/hypothetical.js";
     assert_resolves(ctx,  "./alternate-files/file-from-noext-to-noext-default",
-               Some("browser/alternate-files/file-from-noext-to-noext-default.js"), &no);
+                  Y("browser/alternate-files/file-from-noext-to-noext-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files/file-from-noext-to-noext-default.js",
-               Some("browser/alternate-files/file-from-noext-to-noext-default.js"), &no);
+                  Y("browser/alternate-files/file-from-noext-to-noext-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files/file-from-noext-to-noext-default.json",
-               Some("browser/alternate-files/file-from-noext-to-noext-default.json"), &no);
+                  Y("browser/alternate-files/file-from-noext-to-noext-default.json"), &no);
     assert_resolves(ctx,  "./alternate-files/file-from-noext-to-ext-default",
-               Some("browser/alternate-files/file-from-noext-to-ext-default.js"), &no);
+                  Y("browser/alternate-files/file-from-noext-to-ext-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files/file-from-noext-to-ext-default.js",
-               Some("browser/alternate-files/file-from-noext-to-ext-default.js"), &no);
+                  Y("browser/alternate-files/file-from-noext-to-ext-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files/file-from-noext-to-ext-default.json",
-               Some("browser/alternate-files/file-from-noext-to-ext-default.json"), &no);
+                  Y("browser/alternate-files/file-from-noext-to-ext-default.json"), &no);
     assert_resolves(ctx,  "./alternate-files/file-from-ext-to-noext-default",
-               Some("browser/alternate-files/file-from-ext-to-noext-default.js"), &no);
+                  Y("browser/alternate-files/file-from-ext-to-noext-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files/file-from-ext-to-noext-default.js",
-               Some("browser/alternate-files/file-from-ext-to-noext-default.js"), &no);
+                  Y("browser/alternate-files/file-from-ext-to-noext-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files/file-from-ext-to-noext-default.json",
-               Some("browser/alternate-files/file-from-ext-to-noext-default.json"), &no);
+                  Y("browser/alternate-files/file-from-ext-to-noext-default.json"), &no);
     assert_resolves(ctx,  "./alternate-files/file-from-ext-to-ext-default",
-               Some("browser/alternate-files/file-from-ext-to-ext-default.js"), &no);
+                  Y("browser/alternate-files/file-from-ext-to-ext-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files/file-from-ext-to-ext-default.js",
-               Some("browser/alternate-files/file-from-ext-to-ext-default.js"), &no);
+                  Y("browser/alternate-files/file-from-ext-to-ext-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files/file-from-rel-to-rel-default",
-               Some("browser/alternate-files/file-from-rel-to-rel-default.js"), &no);
+                  Y("browser/alternate-files/file-from-rel-to-rel-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files/file-from-rel-to-rel-default.js",
-               Some("browser/alternate-files/file-from-rel-to-rel-default.js"), &no);
+                  Y("browser/alternate-files/file-from-rel-to-rel-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files/file-from-rel-to-bare-default",
-               Some("browser/alternate-files/file-from-rel-to-bare-default.js"), &no);
+                  Y("browser/alternate-files/file-from-rel-to-bare-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files/file-from-rel-to-bare-default.js",
-               Some("browser/alternate-files/file-from-rel-to-bare-default.js"), &no);
+                  Y("browser/alternate-files/file-from-rel-to-bare-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files/file-from-bare-to-rel-default",
-               Some("browser/alternate-files/file-from-bare-to-rel-default.js"), &no);
+                  Y("browser/alternate-files/file-from-bare-to-rel-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files/file-from-bare-to-rel-default.js",
-               Some("browser/alternate-files/file-from-bare-to-rel-default.js"), &no);
+                  Y("browser/alternate-files/file-from-bare-to-rel-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files/file-from-bare-to-bare-default",
-               Some("browser/alternate-files/file-from-bare-to-bare-default.js"), &no);
+                  Y("browser/alternate-files/file-from-bare-to-bare-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files/file-from-bare-to-bare-default.js",
-               Some("browser/alternate-files/file-from-bare-to-bare-default.js"), &no);
+                  Y("browser/alternate-files/file-from-bare-to-bare-default.js"), &no);
     assert_resolves(ctx,  "./alternate-files/file-from-noext-to-noext-default",
-               Some("browser/alternate-files/file-from-noext-to-noext-browser.js"), &br);
+                  Y("browser/alternate-files/file-from-noext-to-noext-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-files/file-from-noext-to-noext-default.js",
-               Some("browser/alternate-files/file-from-noext-to-noext-default.js"), &br);
+                  Y("browser/alternate-files/file-from-noext-to-noext-default.js"), &br);
     assert_resolves(ctx,  "./alternate-files/file-from-noext-to-noext-default.json",
-               Some("browser/alternate-files/file-from-noext-to-noext-default.json"), &br);
+                  Y("browser/alternate-files/file-from-noext-to-noext-default.json"), &br);
     assert_resolves(ctx,  "./alternate-files/file-from-noext-to-ext-default",
-               Some("browser/alternate-files/file-from-noext-to-ext-browser.js"), &br);
+                  Y("browser/alternate-files/file-from-noext-to-ext-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-files/file-from-noext-to-ext-default.js",
-               Some("browser/alternate-files/file-from-noext-to-ext-default.js"), &br);
+                  Y("browser/alternate-files/file-from-noext-to-ext-default.js"), &br);
     assert_resolves(ctx,  "./alternate-files/file-from-noext-to-ext-default.json",
-               Some("browser/alternate-files/file-from-noext-to-ext-default.json"), &br);
+                  Y("browser/alternate-files/file-from-noext-to-ext-default.json"), &br);
     assert_resolves(ctx,  "./alternate-files/file-from-ext-to-noext-default",
-               Some("browser/alternate-files/file-from-ext-to-noext-browser.js"), &br);
+                  Y("browser/alternate-files/file-from-ext-to-noext-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-files/file-from-ext-to-noext-default.js",
-               Some("browser/alternate-files/file-from-ext-to-noext-browser.js"), &br);
+                  Y("browser/alternate-files/file-from-ext-to-noext-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-files/file-from-ext-to-noext-default.json",
-               Some("browser/alternate-files/file-from-ext-to-noext-default.json"), &br);
+                  Y("browser/alternate-files/file-from-ext-to-noext-default.json"), &br);
     assert_resolves(ctx,  "./alternate-files/file-from-ext-to-ext-default",
-               Some("browser/alternate-files/file-from-ext-to-ext-browser.js"), &br);
+                  Y("browser/alternate-files/file-from-ext-to-ext-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-files/file-from-ext-to-ext-default.js",
-               Some("browser/alternate-files/file-from-ext-to-ext-browser.js"), &br);
+                  Y("browser/alternate-files/file-from-ext-to-ext-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-files/file-from-rel-to-rel-default",
-               Some("browser/alternate-files/file-from-rel-to-rel-browser.js"), &br);
+                  Y("browser/alternate-files/file-from-rel-to-rel-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-files/file-from-rel-to-rel-default.js",
-               Some("browser/alternate-files/file-from-rel-to-rel-browser.js"), &br);
+                  Y("browser/alternate-files/file-from-rel-to-rel-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-files/file-from-rel-to-bare-default",
-               Some("browser/alternate-files/node_modules/file-from-rel-to-bare-browser.js"), &br);
+                  Y("browser/alternate-files/node_modules/file-from-rel-to-bare-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-files/file-from-rel-to-bare-default.js",
-               Some("browser/alternate-files/node_modules/file-from-rel-to-bare-browser.js"), &br);
+                  Y("browser/alternate-files/node_modules/file-from-rel-to-bare-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-files/file-from-bare-to-rel-default",
-               Some("browser/alternate-files/file-from-bare-to-rel-browser.js"), &br);
+                  Y("browser/alternate-files/file-from-bare-to-rel-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-files/file-from-bare-to-rel-default.js",
-               Some("browser/alternate-files/file-from-bare-to-rel-browser.js"), &br);
+                  Y("browser/alternate-files/file-from-bare-to-rel-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-files/file-from-bare-to-bare-default",
-               Some("browser/alternate-files/node_modules/file-from-bare-to-bare-browser.js"), &br);
+                  Y("browser/alternate-files/node_modules/file-from-bare-to-bare-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-files/file-from-bare-to-bare-default.js",
-               Some("browser/alternate-files/node_modules/file-from-bare-to-bare-browser.js"), &br);
+                  Y("browser/alternate-files/node_modules/file-from-bare-to-bare-browser.js"), &br);
 
     let ctx = "browser/alternate-files/hypothetical.js";
     assert_resolves(ctx,                  "./file-from-noext-to-noext-default",
-               Some("browser/alternate-files/file-from-noext-to-noext-default.js"), &no);
+                  Y("browser/alternate-files/file-from-noext-to-noext-default.js"), &no);
     assert_resolves(ctx,                  "./file-from-noext-to-noext-default.js",
-               Some("browser/alternate-files/file-from-noext-to-noext-default.js"), &no);
+                  Y("browser/alternate-files/file-from-noext-to-noext-default.js"), &no);
     assert_resolves(ctx,                  "./file-from-noext-to-noext-default.json",
-               Some("browser/alternate-files/file-from-noext-to-noext-default.json"), &no);
+                  Y("browser/alternate-files/file-from-noext-to-noext-default.json"), &no);
     assert_resolves(ctx,                  "./file-from-noext-to-ext-default",
-               Some("browser/alternate-files/file-from-noext-to-ext-default.js"), &no);
+                  Y("browser/alternate-files/file-from-noext-to-ext-default.js"), &no);
     assert_resolves(ctx,                  "./file-from-noext-to-ext-default.js",
-               Some("browser/alternate-files/file-from-noext-to-ext-default.js"), &no);
+                  Y("browser/alternate-files/file-from-noext-to-ext-default.js"), &no);
     assert_resolves(ctx,                  "./file-from-noext-to-ext-default.json",
-               Some("browser/alternate-files/file-from-noext-to-ext-default.json"), &no);
+                  Y("browser/alternate-files/file-from-noext-to-ext-default.json"), &no);
     assert_resolves(ctx,                  "./file-from-ext-to-noext-default",
-               Some("browser/alternate-files/file-from-ext-to-noext-default.js"), &no);
+                  Y("browser/alternate-files/file-from-ext-to-noext-default.js"), &no);
     assert_resolves(ctx,                  "./file-from-ext-to-noext-default.js",
-               Some("browser/alternate-files/file-from-ext-to-noext-default.js"), &no);
+                  Y("browser/alternate-files/file-from-ext-to-noext-default.js"), &no);
     assert_resolves(ctx,                  "./file-from-ext-to-noext-default.json",
-               Some("browser/alternate-files/file-from-ext-to-noext-default.json"), &no);
+                  Y("browser/alternate-files/file-from-ext-to-noext-default.json"), &no);
     assert_resolves(ctx,                  "./file-from-ext-to-ext-default",
-               Some("browser/alternate-files/file-from-ext-to-ext-default.js"), &no);
+                  Y("browser/alternate-files/file-from-ext-to-ext-default.js"), &no);
     assert_resolves(ctx,                  "./file-from-ext-to-ext-default.js",
-               Some("browser/alternate-files/file-from-ext-to-ext-default.js"), &no);
+                  Y("browser/alternate-files/file-from-ext-to-ext-default.js"), &no);
     assert_resolves(ctx,                  "./file-from-rel-to-rel-default",
-               Some("browser/alternate-files/file-from-rel-to-rel-default.js"), &no);
+                  Y("browser/alternate-files/file-from-rel-to-rel-default.js"), &no);
     assert_resolves(ctx,                  "./file-from-rel-to-rel-default.js",
-               Some("browser/alternate-files/file-from-rel-to-rel-default.js"), &no);
+                  Y("browser/alternate-files/file-from-rel-to-rel-default.js"), &no);
     assert_resolves(ctx,                  "./file-from-rel-to-bare-default",
-               Some("browser/alternate-files/file-from-rel-to-bare-default.js"), &no);
+                  Y("browser/alternate-files/file-from-rel-to-bare-default.js"), &no);
     assert_resolves(ctx,                  "./file-from-rel-to-bare-default.js",
-               Some("browser/alternate-files/file-from-rel-to-bare-default.js"), &no);
+                  Y("browser/alternate-files/file-from-rel-to-bare-default.js"), &no);
     assert_resolves(ctx,                  "./file-from-bare-to-rel-default.js",
-               Some("browser/alternate-files/file-from-bare-to-rel-default.js"), &no);
+                  Y("browser/alternate-files/file-from-bare-to-rel-default.js"), &no);
     assert_resolves(ctx,                  "./file-from-bare-to-bare-default",
-               Some("browser/alternate-files/file-from-bare-to-bare-default.js"), &no);
+                  Y("browser/alternate-files/file-from-bare-to-bare-default.js"), &no);
     assert_resolves(ctx,                  "./file-from-bare-to-bare-default.js",
-               Some("browser/alternate-files/file-from-bare-to-bare-default.js"), &no);
+                  Y("browser/alternate-files/file-from-bare-to-bare-default.js"), &no);
     assert_resolves(ctx,                  "./file-from-noext-to-noext-default",
-               Some("browser/alternate-files/file-from-noext-to-noext-browser.js"), &br);
+                  Y("browser/alternate-files/file-from-noext-to-noext-browser.js"), &br);
     assert_resolves(ctx,                  "./file-from-noext-to-noext-default.js",
-               Some("browser/alternate-files/file-from-noext-to-noext-default.js"), &br);
+                  Y("browser/alternate-files/file-from-noext-to-noext-default.js"), &br);
     assert_resolves(ctx,                  "./file-from-noext-to-noext-default.json",
-               Some("browser/alternate-files/file-from-noext-to-noext-default.json"), &br);
+                  Y("browser/alternate-files/file-from-noext-to-noext-default.json"), &br);
     assert_resolves(ctx,                  "./file-from-noext-to-ext-default",
-               Some("browser/alternate-files/file-from-noext-to-ext-browser.js"), &br);
+                  Y("browser/alternate-files/file-from-noext-to-ext-browser.js"), &br);
     assert_resolves(ctx,                  "./file-from-noext-to-ext-default.js",
-               Some("browser/alternate-files/file-from-noext-to-ext-default.js"), &br);
+                  Y("browser/alternate-files/file-from-noext-to-ext-default.js"), &br);
     assert_resolves(ctx,                  "./file-from-noext-to-ext-default.json",
-               Some("browser/alternate-files/file-from-noext-to-ext-default.json"), &br);
+                  Y("browser/alternate-files/file-from-noext-to-ext-default.json"), &br);
     assert_resolves(ctx,                  "./file-from-ext-to-noext-default",
-               Some("browser/alternate-files/file-from-ext-to-noext-browser.js"), &br);
+                  Y("browser/alternate-files/file-from-ext-to-noext-browser.js"), &br);
     assert_resolves(ctx,                  "./file-from-ext-to-noext-default.js",
-               Some("browser/alternate-files/file-from-ext-to-noext-browser.js"), &br);
+                  Y("browser/alternate-files/file-from-ext-to-noext-browser.js"), &br);
     assert_resolves(ctx,                  "./file-from-ext-to-noext-default.json",
-               Some("browser/alternate-files/file-from-ext-to-noext-default.json"), &br);
+                  Y("browser/alternate-files/file-from-ext-to-noext-default.json"), &br);
     assert_resolves(ctx,                  "./file-from-ext-to-ext-default",
-               Some("browser/alternate-files/file-from-ext-to-ext-browser.js"), &br);
+                  Y("browser/alternate-files/file-from-ext-to-ext-browser.js"), &br);
     assert_resolves(ctx,                  "./file-from-ext-to-ext-default.js",
-               Some("browser/alternate-files/file-from-ext-to-ext-browser.js"), &br);
+                  Y("browser/alternate-files/file-from-ext-to-ext-browser.js"), &br);
     assert_resolves(ctx,                  "./file-from-rel-to-rel-default",
-               Some("browser/alternate-files/file-from-rel-to-rel-browser.js"), &br);
+                  Y("browser/alternate-files/file-from-rel-to-rel-browser.js"), &br);
     assert_resolves(ctx,                  "./file-from-rel-to-rel-default.js",
-               Some("browser/alternate-files/file-from-rel-to-rel-browser.js"), &br);
+                  Y("browser/alternate-files/file-from-rel-to-rel-browser.js"), &br);
     assert_resolves(ctx,                  "./file-from-rel-to-rel-default",
-               Some("browser/alternate-files/file-from-rel-to-rel-browser.js"), &br);
+                  Y("browser/alternate-files/file-from-rel-to-rel-browser.js"), &br);
     assert_resolves(ctx,                  "./file-from-rel-to-bare-default.js",
-               Some("browser/alternate-files/node_modules/file-from-rel-to-bare-browser.js"), &br);
+                  Y("browser/alternate-files/node_modules/file-from-rel-to-bare-browser.js"), &br);
     assert_resolves(ctx,                  "./file-from-rel-to-bare-default",
-               Some("browser/alternate-files/node_modules/file-from-rel-to-bare-browser.js"), &br);
+                  Y("browser/alternate-files/node_modules/file-from-rel-to-bare-browser.js"), &br);
     assert_resolves(ctx,                  "./file-from-bare-to-rel-default.js",
-               Some("browser/alternate-files/file-from-bare-to-rel-browser.js"), &br);
+                  Y("browser/alternate-files/file-from-bare-to-rel-browser.js"), &br);
     assert_resolves(ctx,                  "./file-from-bare-to-rel-default",
-               Some("browser/alternate-files/file-from-bare-to-rel-browser.js"), &br);
+                  Y("browser/alternate-files/file-from-bare-to-rel-browser.js"), &br);
     assert_resolves(ctx,                  "./file-from-bare-to-bare-default.js",
-               Some("browser/alternate-files/node_modules/file-from-bare-to-bare-browser.js"), &br);
+                  Y("browser/alternate-files/node_modules/file-from-bare-to-bare-browser.js"), &br);
     assert_resolves(ctx,                  "./file-from-bare-to-bare-default",
-               Some("browser/alternate-files/node_modules/file-from-bare-to-bare-browser.js"), &br);
+                  Y("browser/alternate-files/node_modules/file-from-bare-to-bare-browser.js"), &br);
 }
 
 #[test]
 fn test_external() {
-    fn assert_resolves(context: &str, from: &str, to: Resolved, input_options: &InputOptions) {
-        let base_path = fixture_path();
-        let to = match to {
-            Resolved::Normal(mut path) => {
-                path.prepend_resolving(&base_path);
-                Resolved::Normal(path)
-            }
-            r => r,
-        };
-        let mut context_path = base_path;
-        context_path.append_resolving(context);
-
-        let resolver = Resolver::new(input_options.clone());
-        // resolves with an empty cache...
-        assert_eq!(resolver.resolve(&context_path, from).unwrap(), to);
-        // ...and with everything cached
-        assert_eq!(resolver.resolve(&context_path, from).unwrap(), to);
-    }
-
     let ext = InputOptions {
         for_browser: false,
         es6_syntax: false,
@@ -1791,32 +1788,32 @@ fn test_external() {
     };
 
     let ctx = "resolve/hypothetical.js";
-    assert_resolves(ctx, "external", Resolved::External, &ext);
-    assert_resolves(ctx, "external/", Resolved::External, &ext);
-    assert_resolves(ctx, "external/file.js", Resolved::External, &ext);
-    assert_resolves(ctx, "external/file", Resolved::External, &ext);
-    assert_resolves(ctx, "external/subdir", Resolved::External, &ext);
-    assert_resolves(ctx, "external/subdir/", Resolved::External, &ext);
-    assert_resolves(ctx, "external/subdir/index.js", Resolved::External, &ext);
-    assert_resolves(ctx,                     "./external",
-        Resolved::Normal(PathBuf::from("resolve/external.js")), &ext);
+    assert_resolves(ctx, "external", External, &ext);
+    assert_resolves(ctx, "external/", External, &ext);
+    assert_resolves(ctx, "external/file.js", External, &ext);
+    assert_resolves(ctx, "external/file", External, &ext);
+    assert_resolves(ctx, "external/subdir", External, &ext);
+    assert_resolves(ctx, "external/subdir/", External, &ext);
+    assert_resolves(ctx, "external/subdir/index.js", External, &ext);
+    assert_resolves(ctx, "./external",
+                 Y("resolve/external.js"), &ext);
 
-    assert_resolves(ctx,                     "./external",
-        Resolved::Normal(PathBuf::from("resolve/external.js")), &non);
-    assert_resolves(ctx,                                    "external",
-        Resolved::Normal(PathBuf::from("resolve/node_modules/external/index.js")), &non);
-    assert_resolves(ctx,                                    "external/",
-        Resolved::Normal(PathBuf::from("resolve/node_modules/external/index.js")), &non);
-    assert_resolves(ctx,                                    "external/file.js",
-        Resolved::Normal(PathBuf::from("resolve/node_modules/external/file.js")), &non);
-    assert_resolves(ctx,                                    "external/file",
-        Resolved::Normal(PathBuf::from("resolve/node_modules/external/file.js")), &non);
-    assert_resolves(ctx,                                    "external/subdir",
-        Resolved::Normal(PathBuf::from("resolve/node_modules/external/subdir/index.js")), &non);
-    assert_resolves(ctx,                                    "external/subdir/index",
-        Resolved::Normal(PathBuf::from("resolve/node_modules/external/subdir/index.js")), &non);
-    assert_resolves(ctx,                                    "external/subdir/index.js",
-        Resolved::Normal(PathBuf::from("resolve/node_modules/external/subdir/index.js")), &non);
+    assert_resolves(ctx, "./external",
+                 Y("resolve/external.js"), &non);
+    assert_resolves(ctx,       "external",
+        Y("resolve/node_modules/external/index.js"), &non);
+    assert_resolves(ctx,       "external/",
+        Y("resolve/node_modules/external/index.js"), &non);
+    assert_resolves(ctx,       "external/file.js",
+        Y("resolve/node_modules/external/file.js"), &non);
+    assert_resolves(ctx,       "external/file",
+        Y("resolve/node_modules/external/file.js"), &non);
+    assert_resolves(ctx,       "external/subdir",
+        Y("resolve/node_modules/external/subdir/index.js"), &non);
+    assert_resolves(ctx,       "external/subdir/index",
+        Y("resolve/node_modules/external/subdir/index.js"), &non);
+    assert_resolves(ctx,       "external/subdir/index.js",
+        Y("resolve/node_modules/external/subdir/index.js"), &non);
 }
 
 fn npm_install(dir: &Path) {
