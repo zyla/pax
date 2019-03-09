@@ -1539,6 +1539,18 @@ where F: FnMut(&str, &str, Resolution<'static>, &InputOptions) {
                   Y("browser/alternate-main-bare/main-default.js"), &no);
     assert_resolves(ctx,  "./alternate-main-bare/main-default.js",
                   Y("browser/alternate-main-bare/main-default.js"), &no);
+    assert_resolves(ctx,  "./alternate-main-index-rel",
+                  Y("browser/alternate-main-index-rel/index.js"), &no);
+    assert_resolves(ctx,  "./alternate-main-index-rel/index",
+                  Y("browser/alternate-main-index-rel/index.js"), &no);
+    assert_resolves(ctx,  "./alternate-main-index-rel/index.js",
+                  Y("browser/alternate-main-index-rel/index.js"), &no);
+    assert_resolves(ctx,  "./alternate-main-index-bare",
+                  Y("browser/alternate-main-index-bare/index.js"), &no);
+    assert_resolves(ctx,  "./alternate-main-index-bare/index",
+                  Y("browser/alternate-main-index-bare/index.js"), &no);
+    assert_resolves(ctx,  "./alternate-main-index-bare/index.js",
+                  Y("browser/alternate-main-index-bare/index.js"), &no);
     assert_resolves(ctx,  "./alternate-main-rel",
                   Y("browser/alternate-main-rel/main-browser.js"), &br);
     assert_resolves(ctx,  "./alternate-main-rel/main-default",
@@ -1551,6 +1563,18 @@ where F: FnMut(&str, &str, Resolution<'static>, &InputOptions) {
                   Y("browser/alternate-main-bare/main-default.js"), &br);
     assert_resolves(ctx,  "./alternate-main-bare/main-default.js",
                   Y("browser/alternate-main-bare/main-default.js"), &br);
+    assert_resolves(ctx,  "./alternate-main-index-rel",
+                  Y("browser/alternate-main-index-rel/index-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-main-index-rel/index",
+                  Y("browser/alternate-main-index-rel/index.js"), &br);
+    assert_resolves(ctx,  "./alternate-main-index-rel/index.js",
+                  Y("browser/alternate-main-index-rel/index.js"), &br);
+    assert_resolves(ctx,  "./alternate-main-index-bare",
+                  Y("browser/alternate-main-index-bare/index-browser.js"), &br);
+    assert_resolves(ctx,  "./alternate-main-index-bare/index",
+                  Y("browser/alternate-main-index-bare/index.js"), &br);
+    assert_resolves(ctx,  "./alternate-main-index-bare/index.js",
+                  Y("browser/alternate-main-index-bare/index.js"), &br);
     let ctx = "browser/alternate-main-rel/hypothetical.js";
     assert_resolves(ctx,                     ".",
                   Y("browser/alternate-main-rel/main-default.js"), &no);
