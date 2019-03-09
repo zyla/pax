@@ -1721,6 +1721,8 @@ where F: FnMut(&str, &str, Resolution<'static>, &InputOptions) {
                   Y("browser/alternate-files/file-from-rel-to-bare-default.js"), &no);
     assert_resolves(ctx,                  "./file-from-rel-to-bare-default.js",
                   Y("browser/alternate-files/file-from-rel-to-bare-default.js"), &no);
+    assert_resolves(ctx,                  "./file-from-bare-to-rel-default",
+                  Y("browser/alternate-files/file-from-bare-to-rel-default.js"), &no);
     assert_resolves(ctx,                  "./file-from-bare-to-rel-default.js",
                   Y("browser/alternate-files/file-from-bare-to-rel-default.js"), &no);
     assert_resolves(ctx,                  "./file-from-bare-to-bare-default",
@@ -1753,8 +1755,6 @@ where F: FnMut(&str, &str, Resolution<'static>, &InputOptions) {
                   Y("browser/alternate-files/file-from-rel-to-rel-browser.js"), &br);
     assert_resolves(ctx,                  "./file-from-rel-to-rel-default.js",
                   Y("browser/alternate-files/file-from-rel-to-rel-browser.js"), &br);
-    assert_resolves(ctx,                  "./file-from-rel-to-rel-default",
-                  Y("browser/alternate-files/file-from-rel-to-rel-browser.js"), &br);
     assert_resolves(ctx,                  "./file-from-rel-to-bare-default.js",
                   Y("browser/alternate-files/node_modules/file-from-rel-to-bare-browser.js"), &br);
     assert_resolves(ctx,                  "./file-from-rel-to-bare-default",
@@ -1763,9 +1763,9 @@ where F: FnMut(&str, &str, Resolution<'static>, &InputOptions) {
                   Y("browser/alternate-files/file-from-bare-to-rel-browser.js"), &br);
     assert_resolves(ctx,                  "./file-from-bare-to-rel-default",
                   Y("browser/alternate-files/file-from-bare-to-rel-browser.js"), &br);
-    assert_resolves(ctx,                  "./file-from-bare-to-bare-default.js",
-                  Y("browser/alternate-files/node_modules/file-from-bare-to-bare-browser.js"), &br);
     assert_resolves(ctx,                  "./file-from-bare-to-bare-default",
+                  Y("browser/alternate-files/node_modules/file-from-bare-to-bare-browser.js"), &br);
+    assert_resolves(ctx,                  "./file-from-bare-to-bare-default.js",
                   Y("browser/alternate-files/node_modules/file-from-bare-to-bare-browser.js"), &br);
 }
 
