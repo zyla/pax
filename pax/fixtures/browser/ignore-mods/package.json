@@ -1,0 +1,16 @@
+{
+  "browser": {
+    "./mod-rel": false,
+    "./mod-rel-file/file-noext": false,
+    "./mod-rel-file/file-ext.js": false,
+    "./mod-rel-subdir/dir": false,
+    "./file-rel-noext": false,
+    "./file-rel-ext.js": false,
+    "mod-bare": false,
+    "mod-bare-file/file-noext": false,
+    "mod-bare-file/file-noext.js": false,
+    "mod-bare-subdir/dir": false,
+    "file-bare-noext": false,
+    "file-bare-ext.js": false,
+  }
+}

@@ -1,12 +1,79 @@
 {
   "browser": {
-    "./file-from-ext-to-ext-default.js": "./file-from-ext-to-ext-browser.js",
-    "./file-from-noext-to-ext-default": "./file-from-noext-to-ext-browser.js",
-    "./file-from-ext-to-noext-default.js": "./file-from-ext-to-noext-browser",
-    "./file-from-noext-to-noext-default": "./file-from-noext-to-noext-browser",
-    "./file-from-rel-to-rel-default.js": "./file-from-rel-to-rel-browser.js",
-    "./file-from-rel-to-bare-default.js": "file-from-rel-to-bare-browser.js",
-    "file-from-bare-to-rel-default.js": "./file-from-bare-to-rel-browser.js",
-    "file-from-bare-to-bare-default.js": "file-from-bare-to-bare-browser.js"
+    "./file-from-rel-ext-to-rel-ext-default.js":
+    "./file-from-rel-ext-to-rel-ext-browser.js",
+    "./file-from-rel-noext-to-rel-ext-default":
+    "./file-from-rel-noext-to-rel-ext-browser.js",
+    "./file-from-rel-slash-to-rel-ext-default/":
+    "./file-from-rel-slash-to-rel-ext-browser.js",
+    "./file-from-rel-ext-to-rel-noext-default.js":
+    "./file-from-rel-ext-to-rel-noext-browser",
+    "./file-from-rel-noext-to-rel-noext-default":
+    "./file-from-rel-noext-to-rel-noext-browser",
+    "./file-from-rel-slash-to-rel-noext-default/":
+    "./file-from-rel-slash-to-rel-noext-browser",
+    "./file-from-rel-ext-to-rel-slash-default.js":
+    "./file-from-rel-ext-to-rel-slash-browser/",
+    "./file-from-rel-noext-to-rel-slash-default":
+    "./file-from-rel-noext-to-rel-slash-browser/",
+    "./file-from-rel-slash-to-rel-slash-default/":
+    "./file-from-rel-slash-to-rel-slash-browser/",
+
+      "file-from-bare-ext-to-rel-ext-default.js":
+    "./file-from-bare-ext-to-rel-ext-browser.js",
+      "file-from-bare-noext-to-rel-ext-default":
+    "./file-from-bare-noext-to-rel-ext-browser.js",
+      "file-from-bare-slash-to-rel-ext-default/":
+    "./file-from-bare-slash-to-rel-ext-browser.js",
+      "file-from-bare-ext-to-rel-noext-default.js":
+    "./file-from-bare-ext-to-rel-noext-browser",
+      "file-from-bare-noext-to-rel-noext-default":
+    "./file-from-bare-noext-to-rel-noext-browser",
+      "file-from-bare-slash-to-rel-noext-default/":
+    "./file-from-bare-slash-to-rel-noext-browser",
+      "file-from-bare-ext-to-rel-slash-default.js":
+    "./file-from-bare-ext-to-rel-slash-browser/",
+      "file-from-bare-noext-to-rel-slash-default":
+    "./file-from-bare-noext-to-rel-slash-browser/",
+      "file-from-bare-slash-to-rel-slash-default/":
+    "./file-from-bare-slash-to-rel-slash-browser/",
+
+    "./file-from-rel-ext-to-bare-ext-default.js":
+      "file-from-rel-ext-to-bare-ext-browser.js",
+    "./file-from-rel-noext-to-bare-ext-default":
+      "file-from-rel-noext-to-bare-ext-browser.js",
+    "./file-from-rel-slash-to-bare-ext-default/":
+      "file-from-rel-slash-to-bare-ext-browser.js",
+    "./file-from-rel-ext-to-bare-noext-default.js":
+      "file-from-rel-ext-to-bare-noext-browser",
+    "./file-from-rel-noext-to-bare-noext-default":
+      "file-from-rel-noext-to-bare-noext-browser",
+    "./file-from-rel-slash-to-bare-noext-default/":
+      "file-from-rel-slash-to-bare-noext-browser",
+    "./file-from-rel-ext-to-bare-slash-default.js":
+      "file-from-rel-ext-to-bare-slash-browser/",
+    "./file-from-rel-noext-to-bare-slash-default":
+      "file-from-rel-noext-to-bare-slash-browser/",
+    "./file-from-rel-slash-to-bare-slash-default/":
+      "file-from-rel-slash-to-bare-slash-browser/",
+
+    "file-from-bare-ext-to-bare-ext-default.js":
+    "file-from-bare-ext-to-bare-ext-browser.js",
+    "file-from-bare-noext-to-bare-ext-default":
+    "file-from-bare-noext-to-bare-ext-browser.js",
+    "file-from-bare-slash-to-bare-ext-default/":
+    "file-from-bare-slash-to-bare-ext-browser.js",
+    "file-from-bare-ext-to-bare-noext-default.js":
+    "file-from-bare-ext-to-bare-noext-browser",
+    "file-from-bare-noext-to-bare-noext-default":
+    "file-from-bare-noext-to-bare-noext-browser",
+    "file-from-bare-slash-to-bare-noext-default/":
+    "file-from-bare-slash-to-bare-noext-browser",
+    "file-from-bare-ext-to-bare-slash-default.js":
+    "file-from-bare-ext-to-bare-slash-browser/",
+    "file-from-bare-noext-to-bare-slash-default":
+    "file-from-bare-noext-to-bare-slash-browser/",
+    "file-from-bare-slash-to-bare-slash-default/":
+    "file-from-bare-slash-to-bare-slash-browser/"
   }
 }
