@@ -1608,6 +1608,8 @@ where F: FnMut(&str, &str, Resolution<'static>, &InputOptions) {
                   Y("browser/alternate-main-rel/main-default.js"), &no);
     assert_resolves(ctx,                     ".",
                   Y("browser/alternate-main-rel/main-browser.js"), &br);
+    assert_resolves(ctx,                     "./main-default",
+                  Y("browser/alternate-main-rel/main-default.js"), &br);
     assert_resolves(ctx,                     "./main-default.js",
                   Y("browser/alternate-main-rel/main-default.js"), &br);
     let ctx = "browser/alternate-main-bare/hypothetical.js";
@@ -1632,6 +1634,8 @@ where F: FnMut(&str, &str, Resolution<'static>, &InputOptions) {
                   Y("browser/alternate-main-index-rel/index.js"), &no);
     assert_resolves(ctx,                           ".",
                   Y("browser/alternate-main-index-rel/index-browser.js"), &br);
+    assert_resolves(ctx,                           "./index",
+                  Y("browser/alternate-main-index-rel/index.js"), &br);
     assert_resolves(ctx,                           "./index.js",
                   Y("browser/alternate-main-index-rel/index.js"), &br);
     let ctx = "browser/alternate-main-index-bare/hypothetical.js";
@@ -1656,6 +1660,8 @@ where F: FnMut(&str, &str, Resolution<'static>, &InputOptions) {
                   Y("browser/alternate-main-subdir-rel/default/main.js"), &no);
     assert_resolves(ctx,                            ".",
                   Y("browser/alternate-main-subdir-rel/browser/main.js"), &br);
+    assert_resolves(ctx,                            "./default/main",
+                  Y("browser/alternate-main-subdir-rel/default/main.js"), &br);
     assert_resolves(ctx,                            "./default/main.js",
                   Y("browser/alternate-main-subdir-rel/default/main.js"), &br);
     let ctx = "browser/alternate-main-subdir-bare/hypothetical.js";
