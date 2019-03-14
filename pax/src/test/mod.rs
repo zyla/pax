@@ -1281,7 +1281,7 @@ fn test_resolve_consistency() {
             let success = true
             function n(from) {
                 let fail = false, to
-                try {{to = require.resolve(from), fail = true}} catch(_) {{}}
+                try {to = require.resolve(from), fail = true} catch(_) {}
                 if (fail) {
                     console.error(`failed:\n  '${from}'\ndoes not fail to resolve; it resolved to:\n  '${to}'\n`)
                     success = false
