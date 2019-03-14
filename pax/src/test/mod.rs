@@ -1500,11 +1500,11 @@ fn test_resolve_consistency() {
     // npm_install(&base_dir.path().join("tools"));
     npm_install(&fixture_dir.join("tools"));
     test_file_map(base_dir.path(), false, Target::Node, &cjs);
+    test_file_map(base_dir.path(), true, Target::Node, &esm);
     test_file_map(base_dir.path(), false, Target::Webpack, &browser);
     if false {
         test_file_map(base_dir.path(), false, Target::Browserify, &browser);
     }
-    test_file_map(base_dir.path(), true, Target::Node, &esm);
 }
 
 #[test]
