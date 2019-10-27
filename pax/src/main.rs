@@ -1438,7 +1438,9 @@ impl Resolver {
             }
 
             let mut suffix = PathBuf::from("node_modules");
-            suffix.push(name);
+            for part in path.components() {
+                suffix.push(part);
+            }
 
             let mut dir = context.to_owned();
             while dir.pop() {
