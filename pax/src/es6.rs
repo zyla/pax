@@ -361,7 +361,10 @@ fn parse_export<'f, 's>(lex: &mut lex::Lexer<'f, 's>, source: &mut String) -> Re
                     );
                     let name = eat!(lex => tok { write!(source, "{}{}", tok.ws_before, tok.tt).unwrap(); },
                         Tt::Id(name) => name,
-                        _ => expected!(lex, "function name"),
+                        _ => {
+                            write!(source, " __default").unwrap();
+                            "__default"
+                        }
                     );
                     Ok(Export::Default(name))
                 },
@@ -768,13 +771,16 @@ mod test {
             // "  async function* testAsyncGen() {}",
             " const __default =  async",
         );
+        assert_export_form!(
+            "export default function () {} _next",
+            Export::Default("__default"),
+            "  function __default",
+        );
     }
 
     #[test]
     fn test_export_default_err() {
         assert_export_form_err!("export default class {} _next");
-        assert_export_form_err!("export default function() {} _next");
-        assert_export_form_err!("export default function*() {} _next");
         assert_export_form_err!("export default async function() {} _next");
         assert_export_form_err!("export default async function*() {} _next");
     }
