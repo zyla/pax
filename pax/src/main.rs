@@ -1552,6 +1552,14 @@ impl Resolver {
 
         if !package {
             if let Some(info) = self.cache.package_info(&mut path)? {
+                if self.input_options.for_browser {
+                    match Self::check_path(Some(&*info), &path) {
+                        PathSubstitution::Replace(p) => {
+                            return Ok(Some(Resolved::Normal(p)))
+                        }
+                        _ => {}
+                    }
+                }
                 path.replace_with(&info.main);
                 return self.resolve_path_or_module(context, path, false, true);
             }
@@ -1579,12 +1587,14 @@ impl Resolver {
 
     fn check_path(package_info: Option<&PackageInfo>, path: &Path) -> PathSubstitution {
         if let Some(package_info) = package_info {
+            println!("check_path package_info: {:?} path: {:?}", package_info, path);
             match package_info.browser_substitutions.0.get(path) {
                 Some(BrowserSubstitution::Ignore) => {
                     return PathSubstitution::Ignore
                 }
-                Some(BrowserSubstitution::Replace(ref path)) => {
-                    return PathSubstitution::Replace(path.clone())
+                Some(BrowserSubstitution::Replace(ref replacement)) => {
+                    println!(" -> replace with {:?}", replacement);
+                    return PathSubstitution::Replace(replacement.clone())
                 }
                 None => {}
             }
@@ -1757,14 +1767,28 @@ impl BrowserField {
                 Default::default()
             }
             BrowserField::Main(mut to) => {
-                if !to.is_explicitly_relative() {
-                    to.prepend_resolving(Path::new("."));
-                }
+                Self::make_explicitly_relative(&mut to);
                 BrowserSubstitutionMap(map! {
-                    main.to_owned() => BrowserSubstitution::Replace(to),
+                    Path::new(".").to_owned() => BrowserSubstitution::Replace(to),
                 })
             }
-            BrowserField::Complex(map) => map,
+            BrowserField::Complex(mut map) => {
+                for (_, sub) in &mut map.0 {
+                    match sub {
+                        BrowserSubstitution::Ignore => {},
+                        BrowserSubstitution::Replace(ref mut p) => {
+                            Self::make_explicitly_relative(p);
+                        }
+                    }
+                }
+                map
+            }
+        }
+    }
+
+    fn make_explicitly_relative(p: &mut PathBuf) {
+        if !p.is_explicitly_relative() {
+            p.prepend_resolving(Path::new("."));
         }
     }
 }

@@ -139,6 +139,7 @@ fn fixture_path() -> PathBuf {
     path
 }
 
+#[derive(Debug)]
 enum Resolution<'a> {
     Y(&'a str),
     Ignore,
@@ -266,6 +267,7 @@ fn test_resolve_path_or_module() {
 }
 
 fn assert_resolves(context: &str, from: &str, to: Resolution, input_options: &InputOptions) {
+//    eprintln!("--- assert_resolves {:?} {:?} {:?}\n{:?}", context, from, to, input_options);
     let base_path = fixture_path();
     let expected = match to {
         Y(to) => {
