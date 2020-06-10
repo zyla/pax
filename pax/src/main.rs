@@ -1587,13 +1587,13 @@ impl Resolver {
 
     fn check_path(package_info: Option<&PackageInfo>, path: &Path) -> PathSubstitution {
         if let Some(package_info) = package_info {
-            println!("check_path package_info: {:?} path: {:?}", package_info, path);
+//            println!("check_path package_info: {:?} path: {:?}", package_info, path);
             match package_info.browser_substitutions.0.get(path) {
                 Some(BrowserSubstitution::Ignore) => {
                     return PathSubstitution::Ignore
                 }
                 Some(BrowserSubstitution::Replace(ref replacement)) => {
-                    println!(" -> replace with {:?}", replacement);
+//                    println!(" -> replace with {:?}", replacement);
                     return PathSubstitution::Replace(replacement.clone())
                 }
                 None => {}
