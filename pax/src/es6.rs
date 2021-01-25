@@ -653,6 +653,7 @@ fn parse_import<'f, 's>(lex: &mut lex::Lexer<'f, 's>, source: &mut String) -> Re
                 }),
             })))
         },
+        // import foo
         Tt::Id(default) => {
             default_bind = Some(default);
             eat!(lex => tok { source.push_str(tok.ws_before) },
@@ -660,6 +661,7 @@ fn parse_import<'f, 's>(lex: &mut lex::Lexer<'f, 's>, source: &mut String) -> Re
                 _ => {},
             );
         },
+        // import.meta
         Tt::Dot => {
             eat!(lex => tok { source.push_str(tok.ws_before) },
                 Tt::Id("meta") => {
@@ -671,6 +673,35 @@ fn parse_import<'f, 's>(lex: &mut lex::Lexer<'f, 's>, source: &mut String) -> Re
                 },
             );
         },
+        // import("foo")
+        Tt::Lparen => eat!(lex,
+            Tt::StrLitSgl(module_source) |
+            Tt::StrLitDbl(module_source) => eat!(lex,
+                Tt::Rparen => {
+                    let start_pos = tok.span.start;
+                    let module = match lex::str_lit_value(module_source) {
+                            Ok(module) => module,
+                            Err(error) => return Err(Error {
+                                kind: ErrorKind::ParseStrLitError(error),
+                                span: lex.recover_span(tok.span).with_owned(),
+                            }),
+                        };
+                    let here = lex.here();
+                    let end_pos = here.span.start - here.ws_before.len();
+                    source.push_str("Promise.resolve(require");
+                    source.push_str(&lex.input()[start_pos..end_pos]);
+                    source.push_str(")");
+                    return Ok(ParsedImport::Import(Import {
+                        module_source: &module_source,
+                        module,
+                        default_bind: None,
+                        binds: Bindings::None,
+                    }))
+                },
+                _ => {},
+            ),
+            _ => {},
+        ),
         _ => parse_binds(lex, source, &mut binds, "module name (string literal) or bindings")?,
     );
     eat!(lex => tok { source.push_str(tok.ws_before) },
